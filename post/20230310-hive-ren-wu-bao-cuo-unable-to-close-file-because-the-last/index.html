@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>20230310 hive任务报错  Unable to close file because the last | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>20230310 hive任务报错  Unable to close file because the last</h1>
+            <p class="article-meta">
+              2023-03-11
+              
+                <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+                  故障报告
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <h3 id="一-问题现象">一、问题现象</h3>
+<p>hive 执行sql 报不能关闭文件，因为福本数不足</p>
+<pre><code class="language-sql">ERROR : FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.mr.MapRedTask. Unable to close file because the last blockBP-1167696284-10.64.2.34-1562655739823:blk_1690213888_1342501992 does not have enough number of replicas.
+
+INFO  : Completed executing command(queryId=hive_20230309060531_6c27a60f-5731-491e-a0be-41be74e8bffd); Time taken: 27.875 seconds
+
+Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.mr.MapRedTask. Unable to close file because the last blockBP-1167696284-10.64.2.34-1562655739823:blk_1690213888_1342501992 does not have enough number of replicas.
+
+taskId-3380371,error
+</code></pre>
+<h3 id="二-持续时间">二、持续时间</h3>
+<p>每天不定期发生</p>
+<h3 id="三-问题原因">三、问题原因</h3>
+<p>从报错的情况看是 hive 执行完的结果在写hdfs文件的时候 由于副本数不够导致 关闭文件失败导致的。</p>
+<p>那么这个是由于什么原因导致的呢？ DataNode上报块写成功通知延迟的原因可能有：网络瓶颈导致、CPU瓶颈导致。</p>
+<p>一般出现上述现象，说明集群负载很大，通过调整参数只是临时规避这个问题，建议还是降低集群负载。例如：避免把所有CPU都分配MR跑任务。</p>
+<p>如果我们要想彻底的明白原理，还需要对hdfs写入文件的流程 加以了解</p>
+<p>看到hdfs 写文件流程最终要通知NameNode 也写成了，上面报错的主要原因就是通知namenode的过程当中超时了</p>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303112207026.png" alt="" loading="lazy"><br>
+这让我想起来很多 logstash webhdfs 关闭gz 压缩文件失败的原因也有可能是这个导致的</p>
+<p>让我们读一下 hdfs 写文件的源码，最后确认文件的流程。</p>
+<pre><code>// 全类名 ：org.apache.hadoop.hdfs.DFSOutputStream
+// hadoop 3.0.0 版本代码
+protected void completeFile(ExtendedBlock last) throws IOException {
+    long localstart = Time.monotonicNow();
+    // 获取配置
+    final DfsClientConf conf = dfsClient.getConf();
+    // int     LOCATEFOLLOWINGBLOCK_INITIAL_DELAY_MS_DEFAULT = 400;
+    // 获取默认间隔 400ms
+    long sleeptime = conf.getBlockWriteLocateFollowingInitialDelayMs();
+    boolean fileComplete = false;
+    // int     LOCATEFOLLOWINGBLOCK_RETRIES_DEFAULT = 5;
+    // 重试次数 默认为5
+    int retries = conf.getNumBlockWriteLocateFollowingRetry();
+    while (!fileComplete) {
+      // 获取关闭文件是否成功 成功的话 下次 循环直接退出
+      fileComplete =
+          dfsClient.namenode.complete(src, dfsClient.clientName, last, fileId);
+      if (!fileComplete) {
+        //  /** Default value for IPC_CLIENT_RPC_TIMEOUT_KEY. */
+        //  public static final int IPC_CLIENT_RPC_TIMEOUT_DEFAULT = 0;
+        // 获取rpc 超时时间 默认为 0
+        final int hdfsTimeout = conf.getHdfsTimeout();
+        // 判断客户端是否运行着 或者 超时时间大于 0
+        if (!dfsClient.clientRunning
+            || (hdfsTimeout &gt; 0
+                &amp;&amp; localstart + hdfsTimeout &lt; Time.monotonicNow())) {
+          String msg = &quot;Unable to close file because dfsclient &quot; +
+              &quot; was unable to contact the HDFS servers. clientRunning &quot; +
+              dfsClient.clientRunning + &quot; hdfsTimeout &quot; + hdfsTimeout;
+          DFSClient.LOG.info(msg);
+          throw new IOException(msg);
+        }
+        try {
+          // 如果重试次数剩余到 0 就抛出异常 结束
+          if (retries == 0) { // 结束while 循环
+            throw new IOException(&quot;Unable to close file because the last block&quot;
+                + last + &quot; does not have enough number of replicas.&quot;);
+          }
+          retries--;
+          // 睡上 一段时间
+          Thread.sleep(sleeptime);
+          // 并对间隔时间翻倍
+          sleeptime *= 2;
+          if (Time.monotonicNow() - localstart &gt; 5000) { // 当大于5秒的时候打印日志
+            DFSClient.LOG.info(&quot;Could not complete &quot; + src + &quot; retrying...&quot;);
+          }
+        } catch (InterruptedException ie) {
+          DFSClient.LOG.warn(&quot;Caught exception &quot;, ie);
+        }
+      }
+    }
+</code></pre>
+<h3 id="四-解决问题">四、解决问题</h3>
+<ol>
+<li>降低Data Node 节点上 NodeManage 节点的 cpu 使用个数</li>
+<li>修改hdfs参数</li>
+</ol>
+<pre><code class="language-sql">-- 默认的参数为5 
+&lt;property&gt;
+        &lt;name&gt;dfs.client.block.write.locateFollowingBlock.retries&lt;/name&gt;
+        &lt;value&gt;8&lt;/value&gt;
+&lt;/property&gt;
+</code></pre>
+<p><strong>说明：<strong>调大</strong>dfs.client.block.write.locateFollowingBlock.retries</strong>参数值，在节点繁忙时会延长文件close的等待时间，正常写入不受影响。</p>
+<ol>
+<li>可以把这个参数在客户机上配置，并不一定非低修改hdfs配置,如在 hive-site或logstash webhdfs 当中配置</li>
+</ol>
+<pre><code class="language-sql">&lt;property&gt;
+        &lt;name&gt;dfs.client.block.write.locateFollowingBlock.retries&lt;/name&gt;
+        &lt;value&gt;8&lt;/value&gt;
+&lt;/property&gt;
+</code></pre>
+<h3 id="五-参考资料">五、参考资料</h3>
+<p>https://help.aliyun.com/document_detail/468629.html<br>
+https://support.huaweicloud.com/trouble-mrs/mrs_03_0081.html</p>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+            <div class="next-post">
+              <div class="next">
+                下一篇
+              </div>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">
+                <h3 class="post-title">
+                  20230227 hive move 移动文件报错
+                </h3>
+              </a>
+            </div>
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge ">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge secondary">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge success">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge secondary">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge secondary">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge secondary">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge warning">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

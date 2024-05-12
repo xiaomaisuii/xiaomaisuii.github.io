@@ -1,0 +1,1667 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://xiaomaisuii.github.io</id>
+    <title>小麦穗的博客</title>
+    <updated>2024-05-12T12:20:08.153Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://xiaomaisuii.github.io"/>
+    <link rel="self" href="https://xiaomaisuii.github.io/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://xiaomaisuii.github.io/images/avatar.png</logo>
+    <icon>https://xiaomaisuii.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2024, 小麦穗的博客</rights>
+    <entry>
+        <title type="html"><![CDATA[20231010 hive count(*) 查询为0]]></title>
+        <id>https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/</id>
+        <link href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">
+        </link>
+        <updated>2023-10-13T13:55:29.000Z</updated>
+        <summary type="html"><![CDATA[<h3 id="一-问题现象">一、问题现象</h3>
+<p>执行count(*) 发现统计结果为0，但是是有数据的。</p>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152508.png" alt="" loading="lazy"></figure>
+<p>count(*)的执行结果不对</p>
+<h3 id="二-影响范围">二、影响范围</h3>
+<p>所有dataX 接入的hive表</p>
+<h3 id="三-问题原因">三、问题原因</h3>
+<p>发现是count(*) 应该是直接查询的hive元数据，并没有实际查询数据来进行统计，那么问题的原因就是为啥元数据里面没有这个统计信息呢？<br>
+<img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152528.png" alt="" loading="lazy"></p>
+<p><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153508.png" alt="" loading="lazy"><br>
+查询资料发现有参数会控制这个 insert overwrite 来统计分区信息的情况，查看也是开启的</p>
+<pre><code>set hive.stats.autogather;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153141.png" alt="" loading="lazy"></figure>
+<p>但是这个表是通过 datax 接入的 那么dataX 接入的时候是没有hive write 插件的，所以使用的hdfs插件 然后走的是 add partitions 的方式加的分区。</p>
+<p>所有手动执行ANALYZE TABLE stage.stage_scheduler_task_instance_df PARTITION(dt='20231008',rgn='cn') COMPUTE STATISTICS 之后在查询发现在查询元数据的方式就查询到了。</p>
+<p>所以解决这个问题,要不在datax 端添加 ANALYZE TABLE ，要不就关闭 查询元数据的操作。关闭这个参数这有一个缺点就是浪费一些性能，不过查询的数据更准确了。</p>
+<pre><code class="language-jsx">set hive.compute.query.using.stats =false;
+</code></pre>
+<h3 id="四-解决问题">四、解决问题</h3>
+<p>由于 ANALYZE TABLE  在多线程并发执行的时候 会存在挂载分区失败的情况：<a href="https://blog.csdn.net/songjifei/article/details/104706737/">analyze 导致的分区挂载错误</a><br>
+所以就不能通过关闭查询元数据来解决问题了，需要解决</p>
+<p>修改hive-site.xml 参数 hive.compute.query.using.stats =false; 关闭查询元数据的方式来解决这个问题</p>
+<p>重启hiveServer2 服务即可</p>
+]]></summary>
+        <content type="html"><![CDATA[<h3 id="一-问题现象">一、问题现象</h3>
+<p>执行count(*) 发现统计结果为0，但是是有数据的。</p>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152508.png" alt="" loading="lazy"></figure>
+<p>count(*)的执行结果不对</p>
+<h3 id="二-影响范围">二、影响范围</h3>
+<p>所有dataX 接入的hive表</p>
+<h3 id="三-问题原因">三、问题原因</h3>
+<p>发现是count(*) 应该是直接查询的hive元数据，并没有实际查询数据来进行统计，那么问题的原因就是为啥元数据里面没有这个统计信息呢？<br>
+<img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152528.png" alt="" loading="lazy"></p>
+<p><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153508.png" alt="" loading="lazy"><br>
+查询资料发现有参数会控制这个 insert overwrite 来统计分区信息的情况，查看也是开启的</p>
+<pre><code>set hive.stats.autogather;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153141.png" alt="" loading="lazy"></figure>
+<p>但是这个表是通过 datax 接入的 那么dataX 接入的时候是没有hive write 插件的，所以使用的hdfs插件 然后走的是 add partitions 的方式加的分区。</p>
+<p>所有手动执行ANALYZE TABLE stage.stage_scheduler_task_instance_df PARTITION(dt='20231008',rgn='cn') COMPUTE STATISTICS 之后在查询发现在查询元数据的方式就查询到了。</p>
+<p>所以解决这个问题,要不在datax 端添加 ANALYZE TABLE ，要不就关闭 查询元数据的操作。关闭这个参数这有一个缺点就是浪费一些性能，不过查询的数据更准确了。</p>
+<pre><code class="language-jsx">set hive.compute.query.using.stats =false;
+</code></pre>
+<h3 id="四-解决问题">四、解决问题</h3>
+<p>由于 ANALYZE TABLE  在多线程并发执行的时候 会存在挂载分区失败的情况：<a href="https://blog.csdn.net/songjifei/article/details/104706737/">analyze 导致的分区挂载错误</a><br>
+所以就不能通过关闭查询元数据来解决问题了，需要解决</p>
+<p>修改hive-site.xml 参数 hive.compute.query.using.stats =false; 关闭查询元数据的方式来解决这个问题</p>
+<p>重启hiveServer2 服务即可</p>
+<!-- more -->
+<!-- more -->
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[20230825 doris fe 不可用故障]]></title>
+        <id>https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/</id>
+        <link href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">
+        </link>
+        <updated>2023-09-03T11:50:00.000Z</updated>
+        <summary type="html"><![CDATA[<h5 id="一-问题现象">一、问题现象</h5>
+<p>24日 晚上 21:25  thing-14节点的  fe 不可用</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.82]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21500|1159757) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.0.130]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,977 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95589|1159853) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,980 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,984 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285774: errCode = 2, detailMessage = transaction [49285774] is already committed, not pre-committed.
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,989 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,992 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:58,015 WARN (thrift-server-pool-95588|1159852) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285772: errCode = 2, detailMessage = transaction [49285772] is already committed, not pre-committed.
+2023-08-24 21:24:58,026 WARN (thrift-server-pool-95594|1159880) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285711: errCode = 2, detailMessage = transaction [49285711] is already committed, not pre-committed.
+2023-08-24 21:24:58,029 WARN (thrift-server-pool-95574|1159784) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285692: errCode = 2, detailMessage = transaction [49285692] is already committed, not pre-committed.
+2023-08-24 21:24:58,030 WARN (thrift-server-pool-95593|1159879) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285722: errCode = 2, detailMessage = transaction [49285722] is already visible, not pre-committed.
+2023-08-24 21:25:18,171 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95566|1159776) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95593|1159879) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95537|1159671) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95574|1159784) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.18.68:22908
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.68]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95576|1159786) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95559|1159769) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93493|1146530) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93416|1146005) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95582|1159839) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91097|1129145) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91184|1129790) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95447|1158984) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,178 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():759] duplicate request for stream load. request id: 7547ca8125770199-c8c667cd4db77bb4, txn: 49285874
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95447|1158984) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,181 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.17.140:46231
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.17.140]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,183 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+2023-08-24 21:25:18,184 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,185 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,186 WARN (thrift-server-pool-95577|1159833) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285866: errCode = 2, detailMessage = transaction [49285866] is already committed, not pre-committed.
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95458|1159258) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,199 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 22:53:21,671 WARN (UNKNOWN 10.64.2.34_9011_1675406978447(-1)|1) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: UNKNOWN
+2023-08-24 22:53:21,694 WARN (RepNode 10.64.2.34_9011_1675406978447(-1)|65) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: FOLLOWER
+</code></pre>
+<p>25日早上后 thing-15节点 也不可用 ，切不可通过重启fe来恢复。</p>
+<pre><code class="language-sql">2023-08-25 10:14:50,112 INFO (replayer|78) [Catalog.replayJournal():2444] replayed journal id is 144013318, replay to journal id is 155973007
+2023-08-25 10:14:50,119 ERROR (replayer|78) [BDBJournalCursor.&lt;init&gt;():84] Can not find the key:144013319, fail to get journal cursor. will exit.
+</code></pre>
+<p>并且再次启动失败</p>
+<h5 id="二-持续时间">二、持续时间</h5>
+<p>14节点：2023-08-24 21:25 ～ 2023-08-24 22:53</p>
+<p>15节点： 25号早上8点 到 11点</p>
+<h5 id="三-问题原因">三、问题原因</h5>
+<p>通过最开始的日志发现</p>
+<pre><code class="language-sql">2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+</code></pre>
+<p>有一条内存满了的日志，在往上找报了一个找不到表的信息</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+</code></pre>
+<p>所以说是fe内存满了 导致宕机。</p>
+<p>第二天早上的 15 机器宕机也是内存的问题，这个写 t_device_info_wide 表的任务还没有下线导致的内存增加。</p>
+<p>但是重启15机器的 fe 报了 元数据错误，这个意思就是 15 节点元数据损坏了，起不来了。</p>
+<h5 id="四-解决问题">四、解决问题</h5>
+<p>上面本质原因是 找不到表 t_device_info_wide 导致内存溢出。先删掉写 表t_device_info_wide的任务 修改FE节点 内存 从 8G 到 16G【内存默认配置在fe.conf配置文件当中】 ,并且从监控上看也是内存占用很高，需要增加了。</p>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202309031949945.png" alt="" loading="lazy"><br>
+15节点元数据算坏，只能手动停止FE进程 。手动删除元数据（可以备份到其他目录）</p>
+<p>登录 客户端 执行 删除 15节点FE的命令</p>
+<pre><code class="language-sql">删除 FE 节点
+使用以下命令删除对应的 FE 节点：
+
+ALTER SYSTEM DROP FOLLOWER[OBSERVER] &quot;fe_host:edit_log_port&quot;;
+</code></pre>
+<p>手动从master 同步元数据 并启动15节点</p>
+<pre><code class="language-sql">首先第一次启动时，需执行以下命令：
+
+./bin/start_fe.sh --helper leader_fe_host:edit_log_port --daemon
+
+其中 leader_fe_host 为 Master 所在节点 ip, edit_log_port 在 Master 的配置文件 fe.conf 中。--helper 参数仅在 follower 和 observer 第一次启动时才需要。
+</code></pre>
+<p>启动成功后，在把新的FE添加进去</p>
+<pre><code class="language-sql">将 Follower 或 Observer 加入到集群
+添加 Follower 或 Observer。使用 mysql-client 连接到已启动的 FE，并执行：
+
+ALTER SYSTEM ADD FOLLOWER &quot;follower_host:edit_log_port&quot;;
+
+或
+
+ALTER SYSTEM ADD OBSERVER &quot;observer_host:edit_log_port&quot;;
+</code></pre>
+<p>最终问题解决。</p>
+<h5 id="五-总结">五、总结</h5>
+<p>fe 有守护进程，但是没有起作用，宕机没有起来。没有对进程的存活监控。没有对进程内存使用的监控报警。</p>
+<p>虽然fe是高可用的方案，但是各业务系统都是连接的单个fe,存在单点故障。</p>
+<p>解决方案 连接多个节点或者对fe节点[8030 9030 等端口]做一个lb负载均衡操作，这样单个节点有问题后会自动切换到另外一个节点，并且还可以做到负载均衡，对单个节点压力较小。</p>
+<h5 id="六-参考资料">六、参考资料</h5>
+<p>https://doris.apache.org/zh-CN/docs/1.2/admin-manual/cluster-management/elastic-expansion/</p>
+]]></summary>
+        <content type="html"><![CDATA[<h5 id="一-问题现象">一、问题现象</h5>
+<p>24日 晚上 21:25  thing-14节点的  fe 不可用</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.82]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21500|1159757) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.0.130]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,977 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95589|1159853) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,980 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,984 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285774: errCode = 2, detailMessage = transaction [49285774] is already committed, not pre-committed.
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,989 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,992 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:58,015 WARN (thrift-server-pool-95588|1159852) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285772: errCode = 2, detailMessage = transaction [49285772] is already committed, not pre-committed.
+2023-08-24 21:24:58,026 WARN (thrift-server-pool-95594|1159880) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285711: errCode = 2, detailMessage = transaction [49285711] is already committed, not pre-committed.
+2023-08-24 21:24:58,029 WARN (thrift-server-pool-95574|1159784) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285692: errCode = 2, detailMessage = transaction [49285692] is already committed, not pre-committed.
+2023-08-24 21:24:58,030 WARN (thrift-server-pool-95593|1159879) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285722: errCode = 2, detailMessage = transaction [49285722] is already visible, not pre-committed.
+2023-08-24 21:25:18,171 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95566|1159776) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95593|1159879) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95537|1159671) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95574|1159784) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.18.68:22908
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.68]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95576|1159786) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95559|1159769) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93493|1146530) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93416|1146005) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95582|1159839) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91097|1129145) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91184|1129790) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95447|1158984) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,178 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():759] duplicate request for stream load. request id: 7547ca8125770199-c8c667cd4db77bb4, txn: 49285874
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95447|1158984) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,181 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.17.140:46231
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.17.140]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,183 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+2023-08-24 21:25:18,184 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,185 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,186 WARN (thrift-server-pool-95577|1159833) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285866: errCode = 2, detailMessage = transaction [49285866] is already committed, not pre-committed.
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95458|1159258) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,199 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 22:53:21,671 WARN (UNKNOWN 10.64.2.34_9011_1675406978447(-1)|1) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: UNKNOWN
+2023-08-24 22:53:21,694 WARN (RepNode 10.64.2.34_9011_1675406978447(-1)|65) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: FOLLOWER
+</code></pre>
+<p>25日早上后 thing-15节点 也不可用 ，切不可通过重启fe来恢复。</p>
+<pre><code class="language-sql">2023-08-25 10:14:50,112 INFO (replayer|78) [Catalog.replayJournal():2444] replayed journal id is 144013318, replay to journal id is 155973007
+2023-08-25 10:14:50,119 ERROR (replayer|78) [BDBJournalCursor.&lt;init&gt;():84] Can not find the key:144013319, fail to get journal cursor. will exit.
+</code></pre>
+<p>并且再次启动失败</p>
+<h5 id="二-持续时间">二、持续时间</h5>
+<p>14节点：2023-08-24 21:25 ～ 2023-08-24 22:53</p>
+<p>15节点： 25号早上8点 到 11点</p>
+<h5 id="三-问题原因">三、问题原因</h5>
+<p>通过最开始的日志发现</p>
+<pre><code class="language-sql">2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+</code></pre>
+<p>有一条内存满了的日志，在往上找报了一个找不到表的信息</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+</code></pre>
+<p>所以说是fe内存满了 导致宕机。</p>
+<p>第二天早上的 15 机器宕机也是内存的问题，这个写 t_device_info_wide 表的任务还没有下线导致的内存增加。</p>
+<p>但是重启15机器的 fe 报了 元数据错误，这个意思就是 15 节点元数据损坏了，起不来了。</p>
+<h5 id="四-解决问题">四、解决问题</h5>
+<p>上面本质原因是 找不到表 t_device_info_wide 导致内存溢出。先删掉写 表t_device_info_wide的任务 修改FE节点 内存 从 8G 到 16G【内存默认配置在fe.conf配置文件当中】 ,并且从监控上看也是内存占用很高，需要增加了。</p>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202309031949945.png" alt="" loading="lazy"><br>
+15节点元数据算坏，只能手动停止FE进程 。手动删除元数据（可以备份到其他目录）</p>
+<p>登录 客户端 执行 删除 15节点FE的命令</p>
+<pre><code class="language-sql">删除 FE 节点
+使用以下命令删除对应的 FE 节点：
+
+ALTER SYSTEM DROP FOLLOWER[OBSERVER] &quot;fe_host:edit_log_port&quot;;
+</code></pre>
+<p>手动从master 同步元数据 并启动15节点</p>
+<pre><code class="language-sql">首先第一次启动时，需执行以下命令：
+
+./bin/start_fe.sh --helper leader_fe_host:edit_log_port --daemon
+
+其中 leader_fe_host 为 Master 所在节点 ip, edit_log_port 在 Master 的配置文件 fe.conf 中。--helper 参数仅在 follower 和 observer 第一次启动时才需要。
+</code></pre>
+<p>启动成功后，在把新的FE添加进去</p>
+<pre><code class="language-sql">将 Follower 或 Observer 加入到集群
+添加 Follower 或 Observer。使用 mysql-client 连接到已启动的 FE，并执行：
+
+ALTER SYSTEM ADD FOLLOWER &quot;follower_host:edit_log_port&quot;;
+
+或
+
+ALTER SYSTEM ADD OBSERVER &quot;observer_host:edit_log_port&quot;;
+</code></pre>
+<p>最终问题解决。</p>
+<h5 id="五-总结">五、总结</h5>
+<p>fe 有守护进程，但是没有起作用，宕机没有起来。没有对进程的存活监控。没有对进程内存使用的监控报警。</p>
+<p>虽然fe是高可用的方案，但是各业务系统都是连接的单个fe,存在单点故障。</p>
+<p>解决方案 连接多个节点或者对fe节点[8030 9030 等端口]做一个lb负载均衡操作，这样单个节点有问题后会自动切换到另外一个节点，并且还可以做到负载均衡，对单个节点压力较小。</p>
+<h5 id="六-参考资料">六、参考资料</h5>
+<p>https://doris.apache.org/zh-CN/docs/1.2/admin-manual/cluster-management/elastic-expansion/</p>
+<!-- more -->
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[20230629 emr hive 写s3 文件一个导致的数据倾斜]]></title>
+        <id>https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/</id>
+        <link href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">
+        </link>
+        <updated>2023-07-15T05:53:41.000Z</updated>
+        <content type="html"><![CDATA[<h5 id="一-问题现象">一、问题现象</h5>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151343768.png" alt="" loading="lazy"><br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151345844.png" alt="" loading="lazy"><br>
+发现有多个任务出现数据倾斜问题,通过上面发现map很多就几分钟跑完了，有几个跑了很久才跑完的，时间差别有些大，并且这个时候有大量reduce在等待那一个map任务跑资源浪费</p>
+<h5 id="二-持续时间">二、持续时间</h5>
+<p>从迁移到emr集群后</p>
+<h5 id="三-问题原因">三、问题原因</h5>
+<p>查询上面任务查询的数据<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151346995.png" alt="" loading="lazy"><br>
+发现数据 都写成一个大文件了，而gz 文件 不支持分片，所以就会导致上游会出现大量一个map很慢的情况。<br>
+于是根emr的技术支持沟通，也没有给出一个彻底解决方案，于是我们把任务改成使用spark-sql 来实现。<br>
+改成sparks-sql 后变成多个小文件了<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151350481.png" alt="" loading="lazy"><br>
+性能耗时对比（随机找了几个大下游任务对比的任务）：<br>
+改造前: 任务运行50分钟<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151350357.png" alt="" loading="lazy"><br>
+改造后: 15分钟<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151351576.png" alt="" loading="lazy"><br>
+改造前: 47分钟<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151351441.png" alt="" loading="lazy"><br>
+改造后: 12 分钟<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151352691.png" alt="" loading="lazy"><br>
+改造前：2个小时<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151352528.png" alt="" loading="lazy"><br>
+改造后：20 分钟<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151355111.png" alt="" loading="lazy"></p>
+<p>性能对比 升  节约  80% 所以任务跑的很快。</p>
+<h5 id="四-总结">四、总结</h5>
+<ol>
+<li>在emr当中，hive 在写s3 会生成一个大文件，导致下游的任务会出现数据倾斜，任务运行时间长并且浪费资源，所以不要使用hive 使用spark-sql 替代.</li>
+<li>遇到这种问题，要及时解决，以免造成不必要的资源浪费。</li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[20230619 yarn nodemanger 节点退出]]></title>
+        <id>https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/</id>
+        <link href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">
+        </link>
+        <updated>2023-07-15T05:20:52.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="一-问题现象">一、问题现象</h4>
+<p>在报警群发现 hadoop nodemanger 节点的系统盘超过90%，并且陆续的超过了90%<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151317270.png" alt="" loading="lazy"></p>
+<p>这个时候 nodemanger 节点已经在陆续退出</p>
+<h4 id="二-持续时间">二、持续时间</h4>
+<p>从 6月 17日 8点到 17点</p>
+<h4 id="三-影响范围">三、影响范围</h4>
+<p>国内所以 hive spark 任务阻塞、并且上报流数据 小时分区挂载失败。</p>
+<h4 id="四-问题原因">四、问题原因</h4>
+<p>直接原因是 发现有一个sql 执行了3天没有结束，导致在 NodeManager 本地目录被打满，NodeManager 退出</p>
+<p>[root@hadoop-21 appcache]# pwd/data/yarn/nm/usercache/juan.chen/appcache[root@hadoop-21 appcache]# du -sh application_1683901442987_383801421G    application_1683901442987_383801<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151318284.png" alt="" loading="lazy"></p>
+<p>本质原因是，NodeManager 本地目录 存放在系统盘上了：/data/yarn/nm<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151319292.png" alt="" loading="lazy"></p>
+<h4 id="五-解决问题">五、解决问题</h4>
+<p>先杀死任务，让nodemanger 任务上线；</p>
+<p>增加 NodeManager 本地目录 [yarn.nodemanager.local-dirs] 为多个数据盘目录，重启 NodeManger 节点。</p>
+<p>/DATA/disk1/yarn/nm<br>
+/DATA/disk2/yarn/nm<br>
+/DATA/disk3/yarn/nm<br>
+/DATA/disk4/yarn/nm<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151320449.png" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[LeetCode 最接近的三数之和+双指针解法]]></title>
+        <id>https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/</id>
+        <link href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">
+        </link>
+        <updated>2023-04-18T13:57:04.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="一-问题">一、问题</h3>
+<p>leetcode[16]<br>
+给你一个长度为 n 的整数数组 nums 和 一个目标值 target。请你从 nums 中选出三个整数，使它们的和与 target 最接近。</p>
+<p>返回这三个数的和。</p>
+<p>假定每组输入只存在恰好一个解。</p>
+<p>示例 1：</p>
+<p>输入：nums = [-1,2,1,-4], target = 1<br>
+输出：2<br>
+解释：与 target 最接近的和是 2 (-1 + 2 + 1 = 2) 。<br>
+示例 2：</p>
+<p>输入：nums = [0,0,0], target = 1<br>
+输出：0<br>
+提示：</p>
+<p>3 &lt;= nums.length &lt;= 1000<br>
+-1000 &lt;= nums[i] &lt;= 1000<br>
+-104 &lt;= target &lt;= 104<br>
+Related Topics<br>
+数组<br>
+双指针<br>
+排序</p>
+<h3 id="二-解题思路">二、解题思路</h3>
+<ol>
+<li>这个问题和三数之和的解题思路很相似</li>
+<li>在数组 nums 中，进行遍历，每遍历一个值利用其下标i，形成一个固定值 nums[i]</li>
+<li>再使用前指针指向 start = i + 1 处，后指针指向 end = nums.length - 1 处，也就是结尾处</li>
+<li>根据 sum = nums[i] + nums[start] + nums[end] 的结果，判断 sum 与目标 target 的距离，如果更近则更新结果 ans</li>
+<li>同时判断 sum 与 target 的大小关系，因为数组有序，如果 sum &gt; target 则 end--，如果 sum &lt; target 则 start++，如果 sum == target 则说明距离为 0 直接返回结果</li>
+<li>总时间复杂度：O(n^2)</li>
+</ol>
+<h3 id="三-代码">三、代码</h3>
+<pre><code>import java.util.Arrays;
+
+
+class Solution {
+    public int threeSumClosest(int[] nums, int target) {
+
+        Arrays.sort(nums);
+
+        int ans = nums[0] + nums[1] + nums[2]; // 初始化
+        int len = nums.length;
+        for (int i = 0; i &lt; len ; i++) {
+            int start = i + 1, end = len  - 1;
+            while (start &lt; end) {
+                int sum = nums[i] + nums[start] + nums[end];
+                if (Math.abs(target -sum) &lt; Math.abs(target -ans))
+                    ans = sum; // 把小的数值，赋值给ans
+                if (sum &gt; target)
+                    end--;
+                else if (sum &lt; target)
+                    start ++;
+                else // 如果 sum = target 就直接返回
+                    return ans;
+            }
+        }
+        return ans;
+    }
+}</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[LeetCode之三数之和数组排序+双指针解法]]></title>
+        <id>https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/</id>
+        <link href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">
+        </link>
+        <updated>2023-04-16T04:11:28.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="一-问题">一、问题</h3>
+<p>leetcode[15]<br>
+给你一个整数数组 nums ，判断是否存在三元组 [nums[i], nums[j], nums[k]] 满足 i != j、i != k 且 j != k ，同时还满足 nums[i] + nums[j] + nums[k] == 0 。请</p>
+<p>你返回所有和为 0 且不重复的三元组。</p>
+<p>注意：答案中不可以包含重复的三元组。<br>
+示例 1：</p>
+<p>输入：nums = [-1,0,1,2,-1,-4]<br>
+输出：[[-1,-1,2],[-1,0,1]]<br>
+解释：<br>
+nums[0] + nums[1] + nums[2] = (-1) + 0 + 1 = 0 。<br>
+nums[1] + nums[2] + nums[4] = 0 + 1 + (-1) = 0 。<br>
+nums[0] + nums[3] + nums[4] = (-1) + 2 + (-1) = 0 。<br>
+不同的三元组是 [-1,0,1] 和 [-1,-1,2] 。<br>
+注意，输出的顺序和三元组的顺序并不重要。<br>
+示例 2：</p>
+<p>输入：nums = [0,1,1]<br>
+输出：[]<br>
+解释：唯一可能的三元组和不为 0 。<br>
+示例 3：</p>
+<p>输入：nums = [0,0,0]<br>
+输出：[[0,0,0]]<br>
+解释：唯一可能的三元组和为 0 。<br>
+提示：</p>
+<p>3 &lt;= nums.length &lt;= 3000<br>
+-105 &lt;= nums[i] &lt;= 105<br>
+Related Topics<br>
+数组<br>
+双指针<br>
+排序</p>
+<h3 id="二-解题思路">二、解题思路</h3>
+<ol>
+<li>使用数组排序进行遍历解析</li>
+<li>首先对数组进行排序，排序后固定一个数nums[i]，在使用左右指针指向nums[i]后面的两端，数字分别为 nums[L] 和 nums[R],计算三个数和sum判读是否满足为0。</li>
+<li>如果nums[i] 大于0，则三数之和必然无法等于0，结束循环。</li>
+<li>如果nums[i] == nums[i-1],则说明该数字重复，会导致结果重复，所以应该跳过</li>
+<li>当 sum == 0 时，nums[L] == nums[L+ 1] 则会导致结果重复，应该跳过，L++</li>
+<li>当 sum == 0 时，nums[R] ==nums[R -1]则会导致结果重复，应该跳过，R--</li>
+<li>时间复杂度：O(n^2),n为数组长度</li>
+</ol>
+<h3 id="三-代码">三、代码</h3>
+<pre><code>import java.util.ArrayList;
+import java.util.Arrays;
+
+//leetcode submit region begin(Prohibit modification and deletion)
+class Solution {
+    public List&lt;List&lt;Integer&gt;&gt; threeSum(int[] nums) {
+       List&lt;List&lt;Integer&gt;&gt; ans = new ArrayList&lt;&gt;();
+       int len = nums.length;
+       if (nums == null || len &lt; 3) return ans;
+        Arrays.sort(nums); // 排序
+        for (int i = 0; i &lt; len; i++) {
+            if(nums[i] &gt; 0) break;// 如果当前的数字大于0，则三数之和一定大于0，所以结束循环
+            if(i &gt; 0 &amp;&amp; nums[i] == nums[i-1]) continue;// 去重
+            int L = i + 1;
+            int R = len -1;
+            while(L &lt; R) {
+                int sum = nums[i] + nums[L] + nums[R];
+                if (sum == 0) {
+                    ans.add(Arrays.asList(nums[i],nums[L],nums[R]));
+                    while (L &lt; R &amp;&amp; nums[L] == nums[L + 1]) L++;// 去重
+                    while (L &lt; R &amp;&amp; nums[R] == nums[R - 1]) R--;// 去重
+                    L++ ;
+                    R--;
+                }
+                else if (sum &lt; 0) L++;
+                else if (sum &gt; 0) R--;
+            }
+        }
+        return ans;
+    }
+}
+
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[20230310 hive任务报错  Unable to close file because the last]]></title>
+        <id>https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/</id>
+        <link href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">
+        </link>
+        <updated>2023-03-11T14:13:07.000Z</updated>
+        <content type="html"><![CDATA[<h3 id="一-问题现象">一、问题现象</h3>
+<p>hive 执行sql 报不能关闭文件，因为福本数不足</p>
+<pre><code class="language-sql">ERROR : FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.mr.MapRedTask. Unable to close file because the last blockBP-1167696284-10.64.2.34-1562655739823:blk_1690213888_1342501992 does not have enough number of replicas.
+
+INFO  : Completed executing command(queryId=hive_20230309060531_6c27a60f-5731-491e-a0be-41be74e8bffd); Time taken: 27.875 seconds
+
+Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.mr.MapRedTask. Unable to close file because the last blockBP-1167696284-10.64.2.34-1562655739823:blk_1690213888_1342501992 does not have enough number of replicas.
+
+taskId-3380371,error
+</code></pre>
+<h3 id="二-持续时间">二、持续时间</h3>
+<p>每天不定期发生</p>
+<h3 id="三-问题原因">三、问题原因</h3>
+<p>从报错的情况看是 hive 执行完的结果在写hdfs文件的时候 由于副本数不够导致 关闭文件失败导致的。</p>
+<p>那么这个是由于什么原因导致的呢？ DataNode上报块写成功通知延迟的原因可能有：网络瓶颈导致、CPU瓶颈导致。</p>
+<p>一般出现上述现象，说明集群负载很大，通过调整参数只是临时规避这个问题，建议还是降低集群负载。例如：避免把所有CPU都分配MR跑任务。</p>
+<p>如果我们要想彻底的明白原理，还需要对hdfs写入文件的流程 加以了解</p>
+<p>看到hdfs 写文件流程最终要通知NameNode 也写成了，上面报错的主要原因就是通知namenode的过程当中超时了</p>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303112207026.png" alt="" loading="lazy"><br>
+这让我想起来很多 logstash webhdfs 关闭gz 压缩文件失败的原因也有可能是这个导致的</p>
+<p>让我们读一下 hdfs 写文件的源码，最后确认文件的流程。</p>
+<pre><code>// 全类名 ：org.apache.hadoop.hdfs.DFSOutputStream
+// hadoop 3.0.0 版本代码
+protected void completeFile(ExtendedBlock last) throws IOException {
+    long localstart = Time.monotonicNow();
+    // 获取配置
+    final DfsClientConf conf = dfsClient.getConf();
+    // int     LOCATEFOLLOWINGBLOCK_INITIAL_DELAY_MS_DEFAULT = 400;
+    // 获取默认间隔 400ms
+    long sleeptime = conf.getBlockWriteLocateFollowingInitialDelayMs();
+    boolean fileComplete = false;
+    // int     LOCATEFOLLOWINGBLOCK_RETRIES_DEFAULT = 5;
+    // 重试次数 默认为5
+    int retries = conf.getNumBlockWriteLocateFollowingRetry();
+    while (!fileComplete) {
+      // 获取关闭文件是否成功 成功的话 下次 循环直接退出
+      fileComplete =
+          dfsClient.namenode.complete(src, dfsClient.clientName, last, fileId);
+      if (!fileComplete) {
+        //  /** Default value for IPC_CLIENT_RPC_TIMEOUT_KEY. */
+        //  public static final int IPC_CLIENT_RPC_TIMEOUT_DEFAULT = 0;
+        // 获取rpc 超时时间 默认为 0
+        final int hdfsTimeout = conf.getHdfsTimeout();
+        // 判断客户端是否运行着 或者 超时时间大于 0
+        if (!dfsClient.clientRunning
+            || (hdfsTimeout &gt; 0
+                &amp;&amp; localstart + hdfsTimeout &lt; Time.monotonicNow())) {
+          String msg = &quot;Unable to close file because dfsclient &quot; +
+              &quot; was unable to contact the HDFS servers. clientRunning &quot; +
+              dfsClient.clientRunning + &quot; hdfsTimeout &quot; + hdfsTimeout;
+          DFSClient.LOG.info(msg);
+          throw new IOException(msg);
+        }
+        try {
+          // 如果重试次数剩余到 0 就抛出异常 结束
+          if (retries == 0) { // 结束while 循环
+            throw new IOException(&quot;Unable to close file because the last block&quot;
+                + last + &quot; does not have enough number of replicas.&quot;);
+          }
+          retries--;
+          // 睡上 一段时间
+          Thread.sleep(sleeptime);
+          // 并对间隔时间翻倍
+          sleeptime *= 2;
+          if (Time.monotonicNow() - localstart &gt; 5000) { // 当大于5秒的时候打印日志
+            DFSClient.LOG.info(&quot;Could not complete &quot; + src + &quot; retrying...&quot;);
+          }
+        } catch (InterruptedException ie) {
+          DFSClient.LOG.warn(&quot;Caught exception &quot;, ie);
+        }
+      }
+    }
+</code></pre>
+<h3 id="四-解决问题">四、解决问题</h3>
+<ol>
+<li>降低Data Node 节点上 NodeManage 节点的 cpu 使用个数</li>
+<li>修改hdfs参数</li>
+</ol>
+<pre><code class="language-sql">-- 默认的参数为5 
+&lt;property&gt;
+        &lt;name&gt;dfs.client.block.write.locateFollowingBlock.retries&lt;/name&gt;
+        &lt;value&gt;8&lt;/value&gt;
+&lt;/property&gt;
+</code></pre>
+<p><strong>说明：<strong>调大</strong>dfs.client.block.write.locateFollowingBlock.retries</strong>参数值，在节点繁忙时会延长文件close的等待时间，正常写入不受影响。</p>
+<ol>
+<li>可以把这个参数在客户机上配置，并不一定非低修改hdfs配置,如在 hive-site或logstash webhdfs 当中配置</li>
+</ol>
+<pre><code class="language-sql">&lt;property&gt;
+        &lt;name&gt;dfs.client.block.write.locateFollowingBlock.retries&lt;/name&gt;
+        &lt;value&gt;8&lt;/value&gt;
+&lt;/property&gt;
+</code></pre>
+<h3 id="五-参考资料">五、参考资料</h3>
+<p>https://help.aliyun.com/document_detail/468629.html<br>
+https://support.huaweicloud.com/trouble-mrs/mrs_03_0081.html</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[20230227 hive move 移动文件报错]]></title>
+        <id>https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/</id>
+        <link href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">
+        </link>
+        <updated>2023-03-05T06:33:46.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="一-问题现象">一、问题现象</h4>
+<ol>
+<li>hive 执行 insert overwrite table dwd_prod_info_frequent_di partition(dt='20230225',rgn='cn') 双分区的形式。</li>
+</ol>
+<pre><code class="language-bash">INFO  : Moving data to directory hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 from hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10002
+INFO  : Starting task [Stage-0:MOVE] in serial mode
+INFO  : Loading data to table ninebot_dw_cn_2c.dwd_prod_t_bms_info_frequent_di partition (dt=20230225, rgn=cn) from hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000
+ERROR : FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 to destination hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 17   Cumulative CPU: 94943.39 sec   HDFS Read: 4486454836 HDFS Write: 15886513875 HDFS EC Read: 0 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 1 days 2 hours 22 minutes 23 seconds 390 msec
+INFO  : Completed executing command(queryId=hive_20230226221823_ff9fc631-15fc-4ebf-871f-36265e72b8fd); Time taken: 6032.278 seconds
+Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 to destination hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn
+taskId-3318086,error
+</code></pre>
+<h4 id="二-持续时间">二、持续时间</h4>
+<p>连续好几天的任务都报了相同的错误</p>
+<h4 id="三-问题原因">三、问题原因</h4>
+<p>使用的CDH hive 2.1.1-cdh6.1.1 版本，上网查资源说是bug,并没有修复<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303051353639.png" alt="" loading="lazy"></p>
+<h4 id="四-解决问题">四、解决问题</h4>
+<pre><code class="language-bash">-- 这个参数默认了cdh的版本并没有开启，所以手动开启一下
+set hive.warehouse.subdir.inherit.perms = false;
+-- 
+set hive.insert.into.multilevel.dirs= true;
+</code></pre>
+<p>最终每天的周期调度还是失败，但是手动删除文件后就在重跑就可以了，问题比较奇怪，所以我从hive改成 spark ，改成spark 之后任务不失败了，并且发现了问题的端倪。<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303051429223.png" alt="" loading="lazy"><br>
+突然间发现不仅有spark 写的文件 ，还有hive生成的文件，所以猜测到有可能是谁的表location写错了。导致写文件冲突了，由于hive每次生成的文件名称都是固定的按照编号，那么如果两个hive同时写一个文件的话，就会出现move过去相同的文件，也就导致move报错。<br>
+既然猜测是 location 写错了，那么就要定位到底是那个表的location写错了。于是登录hive得元数据库。</p>
+<pre><code>
+MySQL [metastore]&gt; select
+    -&gt; t1.TBL_NAME,
+    -&gt; t2.LOCATION
+    -&gt; from (
+    -&gt; select * from TBLS
+    -&gt; ) t1 join (
+    -&gt; select * from SDS
+    -&gt; where LOCATION like '%data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di%'
+    -&gt; ) t2 on t1.SD_ID=t2.SD_ID;
++------------------------------------+----------------------------------------------------------------------------------------------+
+| TBL_NAME                           | LOCATION                                                                                     |
++------------------------------------+----------------------------------------------------------------------------------------------+
+| dwd_prod_bms_info_frequent_v_di | hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di |
+| dwd_prod_info_frequent_di    | hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di |
++------------------------------------+----------------------------------------------------------------------------------------------+
+</code></pre>
+<p>查询得到 有两张表的location相同了；<br>
+查询一下 创建时间；</p>
+<pre><code>MySQL [metastore]&gt; select * from TBLS where TBL_NAME = 'dwd_prod_bms_info_frequent_v_di';
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+| TBL_ID | CREATE_TIME | DB_ID  | LAST_ACCESS_TIME | OWNER | OWNER_TYPE | RETENTION | SD_ID   | TBL_NAME                           | TBL_TYPE       | VIEW_EXPANDED_TEXT | VIEW_ORIGINAL_TEXT |
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+| 737871 |  1677150410 | 386004 |                0 | simba | USER       |         0 | 4460486 | dwd_prod_bms_info_frequent_v_di | EXTERNAL_TABLE | NULL               | NULL               |
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+1 row in set (0.00 sec)
+</code></pre>
+<p>正好和出现问题的时间差不多。所以根本问题是move文件的时候文件名称相同冲突导致的。<br>
+于是修改表的location 问题解决。</p>
+<h4 id="五-参考资料">五、参考资料</h4>
+<p>https://www.notion.so/20230227-hive-move-8b1ecfbe901547faa7011d27ddc94e74?pvs=4#3be0a81c98924d47a4b2507b1b523402<br>
+https://www.notion.so/20230227-hive-move-8b1ecfbe901547faa7011d27ddc94e74?pvs=4#5eebdf49984d499588226ff2c087fb7c</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[maven 找不到 jar 如何修复]]></title>
+        <id>https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/</id>
+        <link href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">
+        </link>
+        <updated>2023-02-26T03:52:38.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="一-问题现象">一、 问题现象</h4>
+<pre><code>org.pentaho:pentaho-aggdesigner-algorithm:pom:5.1.5-jhyde was not found in https://repo.maven.apache.org/maven2 during a previous attempt. This failure was cached in the local repository and resolution is not reattempted until the update interval of central has elapsed or updates are forced
+</code></pre>
+<p>在查看hive源码的时候 导入依赖的时候报 在 maven2仓库找不到</p>
+<h4 id="二-问题原因">二、问题原因</h4>
+<p>原因就是在默认的中央仓库找不到类 pentaho-aggdesigner-algorithm:pom:5.1.5-jhyde，所以我们的思路是找到这个jar包的仓库地址，配置到maven setting.xml文件当中就可以解决了</p>
+<h4 id="三-解决问题">三、解决问题</h4>
+<p>我们打开 maven 仓库 网站 https://mvnrepository.com/<br>
+搜索  pentaho-aggdesigner-algorithm:pom:5.1.5-jhyde<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202302261142595.png" alt="" loading="lazy"></p>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202302261144253.png" alt="" loading="lazy"></figure>
+<p>点击对应的版本号<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202302261144149.png" alt="" loading="lazy"></p>
+<p>这个时候会发现下面有一条Note 会写这个jar包在那个仓库当中<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202302261145396.png" alt="" loading="lazy"><br>
+我们在 maven setting.xml 文件中<profiles> </profiles> 中把上面仓库的地址配置上即可解决问题</p>
+<pre><code>&lt;profile&gt; 
+		&lt;id&gt;spring-plugin&lt;/id&gt;   &lt;!-- id 要唯一 --&gt;
+		&lt;repositories&gt; 
+		  &lt;repository&gt; 
+			&lt;id&gt;spring-plugin-1&lt;/id&gt;  
+			&lt;url&gt;https://repo.spring.io/plugins-release/&lt;/url&gt;  
+			&lt;releases&gt; 
+			  &lt;enabled&gt;true&lt;/enabled&gt; 
+			&lt;/releases&gt;  
+			&lt;snapshots&gt; 
+			  &lt;enabled&gt;true&lt;/enabled&gt;  
+			  &lt;updatePolicy&gt;always&lt;/updatePolicy&gt; 
+			&lt;/snapshots&gt; 
+		  &lt;/repository&gt; 
+		&lt;/repositories&gt; 
+&lt;/profile&gt;
+&lt;!-- 注意要激活配置 --&gt;
+&lt;activeProfiles&gt;
+	  &lt;activeProfile&gt;spring-plugin&lt;/activeProfile&gt;
+&lt;/activeProfiles&gt;
+
+</code></pre>
+<h4 id="四-总结">四、总结</h4>
+<ol>
+<li>之前我都是遇到这种问题 google 一下，有可能尝试很多帖子的方案才解决，其实我们在遇到问题的时候要从根本上解决这个问题，所以按照这种方式，问题会很快解决了。</li>
+<li>这个仓库的地址是海外的，在国内有可能网络不行，所以可以根据仓库的类型替换成国内的镜像，如阿里云。</li>
+<li>切记配置多个mrrior标签，生效的只有一个仓库，只有第一个仓库无法访问的时候，才会使用第二个。但是仓库中没有你要找的包，他不会去访问第二个仓库！</li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[hive udf date_add 源码分析]]></title>
+        <id>https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/</id>
+        <link href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">
+        </link>
+        <updated>2023-02-19T07:45:19.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="hive-函数">hive  函数</h4>
+<p>date_add  ()</p>
+<h4 id="用法">用法</h4>
+<p>select weekofyear('2022-01-01 12:20:20',2)</p>
+<h4 id="返回值">返回值</h4>
+<p>2022-01-03</p>
+<h4 id="函数含义">函数含义</h4>
+<p>对输入的yyyy-MM-dd HH:mm:ss' or 'yyyy-MM-dd' 进行天数相加</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.generic.GenericUDFDateAdd</p>
+<h4 id="源代码">源代码</h4>
+<pre><code>@Description(name = &quot;date_add&quot;,
+    value = &quot;_FUNC_(start_date, num_days) - Returns the date that is num_days after start_date.&quot;,
+    extended = &quot;start_date is a string in the format 'yyyy-MM-dd HH:mm:ss' or&quot;
+        + &quot; 'yyyy-MM-dd'. num_days is a number. The time part of start_date is &quot;
+        + &quot;ignored.\n&quot;
+        + &quot;Example:\n &quot;
+        + &quot;  &gt; SELECT _FUNC_('2009-07-30', 1) FROM src LIMIT 1;\n&quot;
+        + &quot;  '2009-07-31'&quot;)
+@VectorizedExpressions({VectorUDFDateAddColScalar.class, VectorUDFDateAddScalarCol.class, VectorUDFDateAddColCol.class})
+public class GenericUDFDateAdd extends GenericUDF {
+  // hvie Date解析器 把 String =&gt; Date
+  private transient final DateParser dateParser = new DateParser();
+  private transient final Date dateVal = new Date();
+  private transient Converter dateConverter;
+  private transient Converter daysConverter;
+  private transient PrimitiveCategory inputType1;
+  private transient PrimitiveCategory inputType2;
+
+  // DateWritableV2 相当于 java.sql.Date 的可写。日期格式为 YYYY-MM-DD
+  private final DateWritableV2 output = new DateWritableV2();
+  protected int signModifier = 1;  // 1 for addition, -1 for subtraction
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 这里是自己写的的判断 可以更换成 checkArgsSize
+    if (arguments.length != 2) {
+      throw new UDFArgumentLengthException(
+        &quot;date_add() requires 2 argument, got &quot; + arguments.length);
+    }
+    // 验证是否是hive 原始数据类型 可以使用 checkArgPrimitive 替代
+    if (arguments[0].getCategory() != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(0,
+        &quot;Only primitive type arguments are accepted but &quot;
+        + arguments[0].getTypeName() + &quot; is passed. as first arguments&quot;);
+    }
+
+    if (arguments[1].getCategory() != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(1,
+        &quot;Only primitive type arguments are accepted but &quot;
+        + arguments[1].getTypeName() + &quot; is passed. as second arguments&quot;);
+    }
+
+
+
+    inputType1 = ((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory();
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableDateObjectInspector;
+    // 对输入的类型进行校验与转换
+    switch (inputType1) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+      inputType1 = PrimitiveCategory.STRING;
+      dateConverter = ObjectInspectorConverters.getConverter(
+        (PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableStringObjectInspector);
+      break;
+    case TIMESTAMP:
+      dateConverter = new TimestampConverter((PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableTimestampObjectInspector);
+      break;
+    case DATE:
+      dateConverter = ObjectInspectorConverters.getConverter(
+        (PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableDateObjectInspector);
+      break;
+    default:
+      throw new UDFArgumentException(
+        &quot; DATE_ADD() only takes STRING/TIMESTAMP/DATEWRITABLE types as first argument, got &quot;
+        + inputType1);
+    }
+
+    inputType2 = ((PrimitiveObjectInspector) arguments[1]).getPrimitiveCategory();
+    switch (inputType2) {
+      case BYTE:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableByteObjectInspector);
+        break;
+      case SHORT:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableShortObjectInspector);
+        break;
+      case INT:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableIntObjectInspector);
+        break;
+      default:
+        throw new UDFArgumentException(
+            &quot; DATE_ADD() only takes TINYINT/SMALLINT/INT types as second argument, got &quot; + inputType2);
+    }
+
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    if (arguments[0].get() == null) {
+      return null;
+    }
+
+    Object daysWritableObject = daysConverter.convert(arguments[1].get());
+    if (daysWritableObject == null) {
+      return null;
+    }
+
+    int toBeAdded;
+    // 对输入的第二个 需要加减的参数进行类型转换
+    if (daysWritableObject instanceof ByteWritable) {
+      toBeAdded = ((ByteWritable) daysWritableObject).get();
+    } else if (daysWritableObject instanceof ShortWritable) {
+      toBeAdded = ((ShortWritable) daysWritableObject).get();
+    } else if (daysWritableObject instanceof IntWritable) {
+      toBeAdded = ((IntWritable) daysWritableObject).get();
+    } else {
+      return null;
+    }
+
+    // Convert the first param into a DateWritableV2 value
+    // 不同的类型处理的方式不一样
+
+    switch (inputType1) {
+    case STRING:
+      String dateString = dateConverter.convert(arguments[0].get()).toString();
+      if (dateParser.parseDate(dateString, dateVal)) {
+        output.set(dateVal);
+      } else {
+        return null;
+      }
+      break;
+    case TIMESTAMP:
+      Timestamp ts = ((TimestampWritableV2) dateConverter.convert(arguments[0].get()))
+        .getTimestamp();
+      output.set(DateWritableV2.millisToDays(ts.toEpochMilli()));
+      break;
+    case DATE:
+      DateWritableV2 dw = (DateWritableV2) dateConverter.convert(arguments[0].get());
+      output.set(dw.getDays());
+      break;
+    default:
+      throw new UDFArgumentException(
+        &quot;DATE_ADD() only takes STRING/TIMESTAMP/DATEWRITABLE types, got &quot; + inputType1);
+    }
+    // 总体上的思路是把不同的格式转换成天 再相加上第二个参数 再把day转换成 Date类型
+    int newDays = output.getDays() + (signModifier * toBeAdded);
+
+    output.set(newDays);
+    return output;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(&quot;date_add&quot;, children);
+  }
+}
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>整体上架构都是对输入的类型进行校验与转换</li>
+<li>把对输入的时间函数转换成天再进行相加操作，之后再转换成Date返回回去</li>
+</ol>
+<h4 id="总结">总结</h4>
+<ol>
+<li>其实udf函数总体上都是都是比较简单的，所以核心的逻辑很少。</li>
+<li>当看了几个udf源码之后就会发现 每个源码的校验逻辑有的是自己实现，有的是使用父类GenericUDF自带的公共方法写的，我猜测大家实现的方式不同有可能是每个开发者的风格不一样，还有就是再开发这个函数的时候有可能父类当中还没有这个功能的函数。</li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[hive udf date_format 函数源码分析]]></title>
+        <id>https://xiaomaisuii.github.io/post/hive-udf-date_format-han-shu-yuan-ma-fen-xi/</id>
+        <link href="https://xiaomaisuii.github.io/post/hive-udf-date_format-han-shu-yuan-ma-fen-xi/">
+        </link>
+        <updated>2023-02-18T12:33:18.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="hive-函数">hive  函数</h4>
+<p>date_format ()</p>
+<h4 id="用法">用法</h4>
+<p>select weekofyear('2022-01-01 12:20:20','yyyy-MM-dd')</p>
+<h4 id="返回值">返回值</h4>
+<p>2022-01-01</p>
+<h4 id="函数含义">函数含义</h4>
+<p>对输入的日期进行格式化</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.generic.GenericUDFDateFormat</p>
+<h4 id="源代码">源代码</h4>
+<pre><code class="language-java">@Description(name = &quot;date_format&quot;, value = &quot;_FUNC_(date/timestamp/string, fmt) - converts a date/timestamp/string &quot;
+    + &quot;to a value of string in the format specified by the date format fmt.&quot;,
+    extended = &quot;Supported formats are SimpleDateFormat formats - &quot;
+        + &quot;https://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html. &quot;
+        + &quot;Second argument fmt should be constant.\n&quot;
+        + &quot;Example: &gt; SELECT _FUNC_('2015-04-08', 'y');\n '2015'&quot;)
+public class GenericUDFDateFormat extends GenericUDF {
+  // 一个对象转换器
+  private transient Converter[] tsConverters = new Converter[2];
+  // 原始类型类别
+  private transient PrimitiveCategory[] tsInputTypes = new PrimitiveCategory[2];
+  private transient Converter[] dtConverters = new Converter[2];
+  private transient PrimitiveCategory[] dtInputTypes = new PrimitiveCategory[2];
+  private final java.util.Date date = new java.util.Date();
+  // 使用hadoop Text 用于输出
+  private final Text output = new Text();
+  private transient SimpleDateFormat formatter;
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+
+    // 检查输入的参数最大与最小个数
+    checkArgsSize(arguments, 2, 2);
+
+    // 校验输入的参数类型是不是hive的原始数据类型
+    checkArgPrimitive(arguments, 0);
+    checkArgPrimitive(arguments, 1);
+
+
+
+    // the function should support both short date and full timestamp format
+    // time part of the timestamp should not be skipped
+    // 校验数据类型，并保存到 tsInputTypes 、 tsInputTypes 、tsInputTypes 当中
+    // 输入类型必须是 string date 输出类型为 string
+    checkArgGroups(arguments, 0, tsInputTypes, STRING_GROUP, DATE_GROUP);
+    checkArgGroups(arguments, 0, dtInputTypes, STRING_GROUP, DATE_GROUP);
+
+    checkArgGroups(arguments, 1, tsInputTypes, STRING_GROUP);
+
+    // 对于输入的Timestamp 与 Date 获取类型转换器
+    obtainTimestampConverter(arguments, 0, tsInputTypes, tsConverters);
+    obtainDateConverter(arguments, 0, dtInputTypes, dtConverters);
+
+    if (arguments[1] instanceof ConstantObjectInspector) {
+      // 获取date_format() 函数的 要解析的格式
+      String fmtStr = getConstantStringValue(arguments, 1);
+      if (fmtStr != null) {
+        try {
+          // 使用java 的 simpleDateFormat  对输入的格式进行转换并设置时区为UTC
+          formatter = new SimpleDateFormat(fmtStr);
+          formatter.setTimeZone(TimeZone.getTimeZone(&quot;UTC&quot;));
+        } catch (IllegalArgumentException e) {
+          // ignore
+        }
+      }
+    } else {
+      // 当fmtStr 为null 的 时候直接抛出异常
+      throw new UDFArgumentTypeException(1, getFuncName() + &quot; only takes constant as &quot;
+          + getArgOrder(1) + &quot; argument&quot;);
+    }
+
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableStringObjectInspector;
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    if (formatter == null) {
+      return null;
+    }
+    // the function should support both short date and full timestamp format
+    // time part of the timestamp should not be skipped
+    // 把输入的第一个参数与类型转换器 获取到 Timestamp
+
+    Timestamp ts = getTimestampValue(arguments, 0, tsConverters);
+    if (ts == null) { // 如果输入的类型不是Timestamp 就是 Date了
+      // 根据类型转换器 记牌器date
+      Date d = getDateValue(arguments, 0, dtInputTypes, dtConverters);
+      if (d == null) {
+        return null;
+      }
+      // 把date 转换成 ts
+      ts = Timestamp.ofEpochMilli(d.toEpochMilli());
+    }
+    // 赋值给 date
+    date.setTime(ts.toEpochMilli());
+    // 进行格式化
+    String res = formatter.format(date);
+    if (res == null) {
+      return null;
+    }
+    // 赋值给 output
+    output.set(res);
+    return output;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(getFuncName(), children);
+  }
+
+  @Override
+  protected String getFuncName() {
+    return &quot;date_format&quot;;
+  }
+}
+
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>initialize(ObjectInspector[] arguments)  方法当中基本上就是一些输入参数的校验和初始化的代码</li>
+</ol>
+<pre><code>   // 检查输入的参数最大与最小个数
+   checkArgsSize(arguments, 2, 2);
+	
+  /**
+   * 对输入的参数进行个数的校验
+   * @param arguments
+   * @param min
+   * @param max
+   * @throws UDFArgumentLengthException
+   */
+  protected void checkArgsSize(ObjectInspector[] arguments, int min, int max)
+      throws UDFArgumentLengthException {
+    if (arguments.length &lt; min || arguments.length &gt; max) {
+      StringBuilder sb = new StringBuilder();
+      sb.append(getFuncName());
+      sb.append(&quot; requires &quot;);
+      if (min == max) {
+        sb.append(min);
+      } else {
+        sb.append(min).append(&quot;..&quot;).append(max);
+      }
+      sb.append(&quot; argument(s), got &quot;);
+      sb.append(arguments.length);
+      // 如果长度不对的话，就抛出长度异常
+      throw new UDFArgumentLengthException(sb.toString());
+    }
+  }
+
+</code></pre>
+<pre><code>    // 校验输入的参数类型是不是hive的原始数据类型
+    checkArgPrimitive(arguments, 0);
+    checkArgPrimitive(arguments, 1);
+  /**
+   * 校验是否是 PRIMITIVE 类型
+   * PRIMITIVE 为一些hive原始数据类型 如 String
+   * @param arguments
+   * @param i
+   * @throws UDFArgumentTypeException
+   */
+  protected void checkArgPrimitive(ObjectInspector[] arguments, int i)
+      throws UDFArgumentTypeException {
+    ObjectInspector.Category oiCat = arguments[i].getCategory();
+    if (oiCat != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(i, getFuncName() + &quot; only takes primitive types as &quot;
+          + getArgOrder(i) + &quot; argument, got &quot; + oiCat);
+    }
+  }
+</code></pre>
+<pre><code>
+
+    // 对于输入的Timestamp 与 Date 获取类型转换器
+    obtainTimestampConverter(arguments, 0, tsInputTypes, tsConverters);
+  /**
+   * 获取时间戳转换器
+   *
+   * @param arguments 输入数组
+   * @param i 输入的数组下标
+   * @param inputTypes 输入的类型数
+   * @param converters 转换器
+   * @throws UDFArgumentTypeException
+   */
+  protected void obtainTimestampConverter(ObjectInspector[] arguments, int i,
+      PrimitiveCategory[] inputTypes, Converter[] converters) throws UDFArgumentTypeException {
+    PrimitiveObjectInspector inOi = (PrimitiveObjectInspector) arguments[i];
+    PrimitiveCategory inputType = inOi.getPrimitiveCategory();
+    ObjectInspector outOi;
+
+    // 对获取的类型进行一个校验
+    switch (inputType) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+    case TIMESTAMP:
+    case DATE:
+    case TIMESTAMPLOCALTZ:
+      break;
+    default:
+      throw new UDFArgumentTypeException(i, getFuncName()
+          + &quot; only takes STRING_GROUP or DATE_GROUP types as &quot; + getArgOrder(i) + &quot; argument, got &quot;
+          + inputType);
+    }
+    outOi = PrimitiveObjectInspectorFactory.writableTimestampObjectInspector;
+    // 把获取到的Timestamp类型转换其复制给converters 对象
+    converters[i] = ObjectInspectorConverters.getConverter(inOi, outOi);
+    inputTypes[i] = inputType;
+  }
+    obtainDateConverter(arguments, 0, dtInputTypes, dtConverters);
+    
+</code></pre>
+<ol start="2">
+<li>evaluate(DeferredObject[] arguments)  核心的函数</li>
+</ol>
+<pre><code>	// 其中的核心就是使用java的 SimpleDateFormat 进行转换
+    Timestamp ts = getTimestampValue(arguments, 0, tsConverters);
+    if (ts == null) { // 如果输入的类型不是Timestamp 就是 Date了
+      // 根据类型转换器 记牌器date
+      Date d = getDateValue(arguments, 0, dtInputTypes, dtConverters);
+      if (d == null) {
+        return null;
+      }
+      // 把date 转换成 ts
+      ts = Timestamp.ofEpochMilli(d.toEpochMilli());
+    }
+    // 赋值给 date
+    date.setTime(ts.toEpochMilli());
+    // 进行格式化
+    String res = formatter.format(date);
+
+</code></pre>
+<h4 id="总结">总结</h4>
+<ol>
+<li>其实核心代码比较简单，大量的都是再数据类型的校验与转换上。</li>
+<li>但是从读代码的角度上看，发现了源码处处都在做校验，这也是源码再代码质量上做了很多。</li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[hive udf weekofyear 源码分析]]></title>
+        <id>https://xiaomaisuii.github.io/post/hive-udf-weekofyear-yuan-ma-fen-xi/</id>
+        <link href="https://xiaomaisuii.github.io/post/hive-udf-weekofyear-yuan-ma-fen-xi/">
+        </link>
+        <updated>2023-02-16T12:59:53.000Z</updated>
+        <content type="html"><![CDATA[<h4 id="hive-函数">hive  函数</h4>
+<p>weekofyear()</p>
+<h4 id="用法">用法</h4>
+<p>select weekofyear('2022-01-01')  或 select weekofyear('2022-01-01 12:00:00')</p>
+<h4 id="返回值">返回值</h4>
+<p>1</p>
+<h4 id="函数含义">函数含义</h4>
+<p>给定一个日期返回再当年的第几周</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.UDFWeekOfYear</p>
+<h4 id="源代码">源代码</h4>
+<pre><code>@Description(name = &quot;yearweek&quot;,
+    value = &quot;_FUNC_(date) - Returns the week of the year of the given date. A week &quot;
+    + &quot;is considered to start on a Monday and week 1 is the first week with &gt;3 days.&quot;,
+    extended = &quot;Examples:\n&quot;
+    + &quot;  &gt; SELECT _FUNC_('2008-02-20') FROM src LIMIT 1;\n&quot;
+    + &quot;  8\n&quot;
+    + &quot;  &gt; SELECT _FUNC_('1980-12-31 12:59:59') FROM src LIMIT 1;\n&quot; + &quot;  1&quot;)
+@VectorizedExpressions({VectorUDFWeekOfYearDate.class, VectorUDFWeekOfYearString.class, VectorUDFWeekOfYearTimestamp.class})
+@NDV(maxNdv = 52)
+// 因为一年当中最大为52周，所以返回值最大就为52
+public class UDFWeekOfYear extends UDF {
+	// 结果值返回值，使用Hadoop的IntWritable 数据类型
+  private final IntWritable result = new IntWritable();
+	// 使用 java Calendar 获取日期再一年中的第几个周
+	// 默认使用 utc 时区
+  private final Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(&quot;UTC&quot;));
+
+	
+  public UDFWeekOfYear() {
+  		// 设置一周的第一天是什么；例如，美国的SUNDAY ，法国的MONDAY 。
+    calendar.setFirstDayOfWeek(Calendar.MONDAY);
+	   // 设置一年中第一周所需的最少天数；例如，如果将第一周定义为包含一年第一个月的第一天的一周，则使用值 1 调用此方法。如果必须是整周，则使用值 4。
+    calendar.setMinimalDaysInFirstWeek(4);
+  }
+
+  /**
+   * Get the week of the year from a date string.
+   *
+   * @param dateString
+   *          the dateString in the format of &quot;yyyy-MM-dd HH:mm:ss&quot; or
+   *          &quot;yyyy-MM-dd&quot;.
+   * @return an int from 1 to 53. null if the dateString is not a valid date
+   *         string.
+   */
+  public IntWritable evaluate(Text dateString) {
+  		// 非空判断
+    if (dateString == null) {
+      return null;
+    }
+    try {
+	    // 对输出的字符串转换成Date类型
+      Date date = Date.valueOf(dateString.toString());
+				// 转换成秒
+      calendar.setTimeInMillis(date.toEpochMilli());
+	     // 获取第几周
+      result.set(calendar.get(Calendar.WEEK_OF_YEAR));
+      return result;
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+	// 只是传入的参数类型为hive自定义的 DateWritableV2 其他的都一样
+  public IntWritable evaluate(DateWritableV2 d) {
+    if (d == null) {
+      return null;
+    }
+    Date date = d.get();
+    calendar.setTimeInMillis(date.toEpochMilli());
+    result.set(calendar.get(Calendar.WEEK_OF_YEAR));
+    return result;
+  }
+	// 只是传入的参数类型为hive自定义的 TimestampWritableV2 其他的都产不多
+  public IntWritable evaluate(TimestampWritableV2 t) {
+    if (t == null) {
+      return null;
+    }
+
+    Timestamp ts = t.getTimestamp();
+    calendar.setTimeInMillis(ts.toEpochMilli());
+    result.set(calendar.get(Calendar.WEEK_OF_YEAR));
+    return result;
+  }
+
+}
+</code></pre>
+<h4 id="总结">总结</h4>
+<ol>
+<li>整体上这个函数，比较简单，做了一些简单的值域判断，加上使用java calendar 类型加工。</li>
+</ol>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[hive udf year() 源码分析]]></title>
+        <id>https://xiaomaisuii.github.io/post/hive-udf-year-yuan-ma-fen-xi/</id>
+        <link href="https://xiaomaisuii.github.io/post/hive-udf-year-yuan-ma-fen-xi/">
+        </link>
+        <updated>2023-02-08T14:42:30.000Z</updated>
+        <content type="html"><![CDATA[<!-- more -->
+<h4 id="hive-函数">hive  函数</h4>
+<p>year()</p>
+<h4 id="用法">用法</h4>
+<p>select year('2022-02-01')</p>
+<h4 id="返回值">返回值</h4>
+<p>2022</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.UDFYear</p>
+<h4 id="源代码">源代码</h4>
+<pre><code>/**
+ * UDFYear.
+ *
+ */
+// @Description 注解为函数的描述与用法
+@Description(name = &quot;year&quot;,
+    value = &quot;_FUNC_(param) - Returns the year component of the date/timestamp/interval&quot;,
+    extended = &quot;param can be one of:\n&quot;
+    + &quot;1. A string in the format of 'yyyy-MM-dd HH:mm:ss' or 'yyyy-MM-dd'.\n&quot;
+    + &quot;2. A date value\n&quot;
+    + &quot;3. A timestamp value\n&quot;
+    + &quot;4. A year-month interval value&quot;
+    + &quot;Example:\n &quot;
+    + &quot;  &gt; SELECT _FUNC_('2009-07-30') FROM src LIMIT 1;\n&quot; + &quot;  2009&quot;)
+@VectorizedExpressions({VectorUDFYearDate.class, VectorUDFYearString.class, VectorUDFYearTimestamp.class})
+// TODO NDV (number of distinct values) 注解是预设的一个估计值，帮助查询优化器更好的评估该列的数据分布
+@NDV(maxNdv = 20) // although technically its unbounded, its unlikely we will ever see ndv &gt; 20
+public class UDFYear extends GenericUDF {
+
+  private transient ObjectInspectorConverters.Converter[] converters =
+          new ObjectInspectorConverters.Converter[1];
+  private transient PrimitiveObjectInspector.PrimitiveCategory[] inputTypes =
+          new PrimitiveObjectInspector.PrimitiveCategory[1];
+  private final IntWritable output = new IntWritable();
+
+  private final Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(&quot;UTC&quot;));
+
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 函数输入参数个数检验
+    checkArgsSize(arguments, 1, 1);
+    // 函数输入参数数据类型检验 Primitive 是否是原始数据类型
+    checkArgPrimitive(arguments, 0);
+    // 对传入的参数 进行类型转换
+    switch (((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory()) {
+      case INTERVAL_YEAR_MONTH:
+        inputTypes[0] = PrimitiveObjectInspector.PrimitiveCategory.INTERVAL_YEAR_MONTH;
+        converters[0] = ObjectInspectorConverters.getConverter(
+            arguments[0], PrimitiveObjectInspectorFactory.writableHiveIntervalYearMonthObjectInspector);
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        obtainDateConverter(arguments, 0, inputTypes, converters);
+        break;
+      default:
+        // build error message
+        StringBuilder sb = new StringBuilder();
+        sb.append(getFuncName());
+        sb.append(&quot; does not take &quot;);
+        sb.append(((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory());
+        sb.append(&quot; type&quot;);
+        throw new UDFArgumentTypeException(0, sb.toString());
+    }
+    // 返回一个输出类型对象检查器
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableIntObjectInspector;
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    switch (inputTypes[0]) {
+      case INTERVAL_YEAR_MONTH:
+        HiveIntervalYearMonth intervalYearMonth = getIntervalYearMonthValue(arguments, 0, inputTypes, converters);
+        if (intervalYearMonth == null) {
+          return null;
+        }
+        output.set(intervalYearMonth.getYears());
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+	    // 转换成date 类型然后再使用calendar 取年
+        Date date = getDateValue(arguments, 0, inputTypes, converters);
+        if (date == null) {
+          return null;
+        }
+        calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+    }
+    return output;
+  }
+	// 返回函数的名称 用于
+  @Override
+  protected String getFuncName() {
+    return &quot;year&quot;;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(getFuncName(), children);
+  }
+}
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>整体上year() 函数比较简单，主要的方法有两个 initialize(ObjectInspector[] arguments) 与 evaluate(DeferredObject[] arguments)</li>
+<li>initialize(ObjectInspector[] arguments)  进行初始化的一些操作</li>
+</ol>
+<pre><code>public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 函数输入参数个数检验
+    checkArgsSize(arguments, 1, 1);
+    // 函数输入参数数据类型检验 Primitive 是否是原始数据类型
+    checkArgPrimitive(arguments, 0);
+    // 对传入的参数 进行类型转换
+    switch (((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory()) {
+      case INTERVAL_YEAR_MONTH:
+        inputTypes[0] = PrimitiveObjectInspector.PrimitiveCategory.INTERVAL_YEAR_MONTH;
+        converters[0] = ObjectInspectorConverters.getConverter(
+            arguments[0], PrimitiveObjectInspectorFactory.writableHiveIntervalYearMonthObjectInspector);
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        obtainDateConverter(arguments, 0, inputTypes, converters);
+        break;
+      default:
+        // build error message
+        StringBuilder sb = new StringBuilder();
+        sb.append(getFuncName());
+        sb.append(&quot; does not take &quot;);
+        sb.append(((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory());
+        sb.append(&quot; type&quot;);
+        throw new UDFArgumentTypeException(0, sb.toString());
+    }
+    // 返回一个输出类型对象检查器
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableIntObjectInspector;
+    return outputOI;
+  }
+</code></pre>
+<p>整体上就是对输入的参数进行校验与转换并返回一个输出类型的对象检查器<br>
+3. evaluate(DeferredObject[] arguments) 是  year() udf函数的核心操作‘</p>
+<pre><code>public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    switch (inputTypes[0]) {
+      case INTERVAL_YEAR_MONTH:
+        HiveIntervalYearMonth intervalYearMonth = getIntervalYearMonthValue(arguments, 0, inputTypes, converters);
+        if (intervalYearMonth == null) {
+          return null;
+        }
+        output.set(intervalYearMonth.getYears());
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        Date date = getDateValue(arguments, 0, inputTypes, converters);
+        if (date == null) {
+          return null;
+        }
+        calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+    }
+    return output;
+  }
+</code></pre>
+<p>对输入的日期获取年<br>
+当输入的类型是 INTERVAL_YEAR_MONTH 的时候 直接进 getIntervalYearMonthValue(arguments, 0, inputTypes, converters)</p>
+<pre><code>// org.apache.hadoop.hive.ql.udf.generic.GenericUDF
+protected HiveIntervalYearMonth getIntervalYearMonthValue(DeferredObject[] arguments, int i,
+                                                            PrimitiveCategory[] inputTypes,
+      Converter[] converters) throws HiveException {
+    Object obj;
+	// 对输入的参数进行校验，当是null的时候直接返回
+    if ((obj = arguments[i].get()) == null) {
+      return null;
+    }
+
+    HiveIntervalYearMonth intervalYearMonth;
+    switch (inputTypes[i]) {
+      case STRING:
+      case VARCHAR:
+      case CHAR:
+        String intervalYearMonthStr = converters[i].convert(obj).toString();
+        intervalYearMonth = HiveIntervalYearMonth.valueOf(intervalYearMonthStr);
+        break;
+      case INTERVAL_YEAR_MONTH:
+        Object writableValue = converters[i].convert(obj);
+        intervalYearMonth = ((HiveIntervalYearMonthWritable) writableValue).getHiveIntervalYearMonth();``
+        break;
+      default: // 当类型都匹配不上的时候 抛出异常
+        throw new UDFArgumentTypeException(0, getFuncName()
+            + &quot; only takes INTERVAL_YEAR_MONTH and STRING_GROUP types, got &quot; + inputTypes[i]);
+    }
+    return intervalYearMonth;
+  }
+
+</code></pre>
+<p>getIntervalYearMonthValue 方法对 输入的进行封装成 HiveIntervalYearMonth 当中有 getYear() 直接返回年份</p>
+<pre><code>protected final static int MONTHS_PER_YEAR = 12;
+public int getYears() {
+// 使用取整的方式进行获取年
+    return totalMonths / MONTHS_PER_YEAR;
+}
+public void set(int years, int months) {
+    this.totalMonths = months;
+    this.totalMonths += years * MONTHS_PER_YEAR;
+}
+</code></pre>
+<p>当输入的是 字符串和TIMSTAMP类型的时候 走 getDateValue(arguments, 0, inputTypes, converters); 返回一个 date</p>
+<pre><code>// org.apache.hadoop.hive.ql.udf.generic.GenericUDF
+protected Date getDateValue(DeferredObject[] arguments, int i, PrimitiveCategory[] inputTypes,
+                              Converter[] converters) throws HiveException {
+    Object obj;
+    if ((obj = arguments[i].get()) == null) {
+      return null;
+    }
+
+    Date date;
+    switch (inputTypes[i]) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+      String dateStr = converters[i].convert(obj).toString();
+      try {
+       // 转换date期类型
+        date = Date.valueOf(dateStr);
+      } catch (IllegalArgumentException e) {
+        date = null;
+      }
+      break;
+    case TIMESTAMP:
+    case DATE:
+    case TIMESTAMPLOCALTZ:
+      Object writableValue = converters[i].convert(obj);
+      date = ((DateWritableV2) writableValue).get();
+      break;
+    default:
+      throw new UDFArgumentTypeException(0, getFuncName()
+          + &quot; only takes STRING_GROUP and DATE_GROUP types, got &quot; + inputTypes[i]);
+    }
+    return date;
+  }
+
+</code></pre>
+<p>其核心就是  date = Date.valueOf(dateStr); 转换成date类型</p>
+<p>再次回到 evaluate(DeferredObject[] arguments) 方法中</p>
+<pre><code class="language-java">// 根据java的 calendar 类型 进行求年
+calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+</code></pre>
+<h4 id="总结">总结</h4>
+<ol>
+<li>虽然函数的功能很少，但是底层代码逻辑写的还是较为复杂的，其中有大量校验逻辑，这也充分说明hive源码当中做了很多代码质量的工作。</li>
+<li>再读源码的时候，可以学习到很大大佬写代码的风格与思考，看似简单的逻辑，其实要写的健壮性比较高的话，还是需要考虑很多的。</li>
+<li>其中有很多地方不懂得地方可以debug或者自己写代码测试</li>
+</ol>
+]]></content>
+    </entry>
+</feed>

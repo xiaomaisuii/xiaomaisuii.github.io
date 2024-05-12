@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>20230227 hive move 移动文件报错 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>20230227 hive move 移动文件报错</h1>
+            <p class="article-meta">
+              2023-03-05
+              
+                <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge warning">
+                  故障报告
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <h4 id="一-问题现象">一、问题现象</h4>
+<ol>
+<li>hive 执行 insert overwrite table dwd_prod_info_frequent_di partition(dt='20230225',rgn='cn') 双分区的形式。</li>
+</ol>
+<pre><code class="language-bash">INFO  : Moving data to directory hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 from hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10002
+INFO  : Starting task [Stage-0:MOVE] in serial mode
+INFO  : Loading data to table ninebot_dw_cn_2c.dwd_prod_t_bms_info_frequent_di partition (dt=20230225, rgn=cn) from hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000
+ERROR : FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 to destination hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn
+INFO  : MapReduce Jobs Launched: 
+INFO  : Stage-Stage-1: Map: 17   Cumulative CPU: 94943.39 sec   HDFS Read: 4486454836 HDFS Write: 15886513875 HDFS EC Read: 0 SUCCESS
+INFO  : Total MapReduce CPU Time Spent: 1 days 2 hours 22 minutes 23 seconds 390 msec
+INFO  : Completed executing command(queryId=hive_20230226221823_ff9fc631-15fc-4ebf-871f-36265e72b8fd); Time taken: 6032.278 seconds
+Error while processing statement: FAILED: Execution Error, return code 1 from org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn/.hive-staging_hive_2023-02-26_22-18-23_057_6764590617411203663-4519/-ext-10000 to destination hdfs://nameservice1/data/hive/warehouse/ninebot_dw_cn_2c/dwd/dwd_prod_t_bms_info_frequent_di/dt=20230225/rgn=cn
+taskId-3318086,error
+</code></pre>
+<h4 id="二-持续时间">二、持续时间</h4>
+<p>连续好几天的任务都报了相同的错误</p>
+<h4 id="三-问题原因">三、问题原因</h4>
+<p>使用的CDH hive 2.1.1-cdh6.1.1 版本，上网查资源说是bug,并没有修复<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303051353639.png" alt="" loading="lazy"></p>
+<h4 id="四-解决问题">四、解决问题</h4>
+<pre><code class="language-bash">-- 这个参数默认了cdh的版本并没有开启，所以手动开启一下
+set hive.warehouse.subdir.inherit.perms = false;
+-- 
+set hive.insert.into.multilevel.dirs= true;
+</code></pre>
+<p>最终每天的周期调度还是失败，但是手动删除文件后就在重跑就可以了，问题比较奇怪，所以我从hive改成 spark ，改成spark 之后任务不失败了，并且发现了问题的端倪。<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202303051429223.png" alt="" loading="lazy"><br>
+突然间发现不仅有spark 写的文件 ，还有hive生成的文件，所以猜测到有可能是谁的表location写错了。导致写文件冲突了，由于hive每次生成的文件名称都是固定的按照编号，那么如果两个hive同时写一个文件的话，就会出现move过去相同的文件，也就导致move报错。<br>
+既然猜测是 location 写错了，那么就要定位到底是那个表的location写错了。于是登录hive得元数据库。</p>
+<pre><code>
+MySQL [metastore]&gt; select
+    -&gt; t1.TBL_NAME,
+    -&gt; t2.LOCATION
+    -&gt; from (
+    -&gt; select * from TBLS
+    -&gt; ) t1 join (
+    -&gt; select * from SDS
+    -&gt; where LOCATION like '%data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di%'
+    -&gt; ) t2 on t1.SD_ID=t2.SD_ID;
++------------------------------------+----------------------------------------------------------------------------------------------+
+| TBL_NAME                           | LOCATION                                                                                     |
++------------------------------------+----------------------------------------------------------------------------------------------+
+| dwd_prod_bms_info_frequent_v_di | hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di |
+| dwd_prod_info_frequent_di    | hdfs://nameservice1/data/hive/warehouse/2c/dwd/dwd_prod_info_frequent_di |
++------------------------------------+----------------------------------------------------------------------------------------------+
+</code></pre>
+<p>查询得到 有两张表的location相同了；<br>
+查询一下 创建时间；</p>
+<pre><code>MySQL [metastore]&gt; select * from TBLS where TBL_NAME = 'dwd_prod_bms_info_frequent_v_di';
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+| TBL_ID | CREATE_TIME | DB_ID  | LAST_ACCESS_TIME | OWNER | OWNER_TYPE | RETENTION | SD_ID   | TBL_NAME                           | TBL_TYPE       | VIEW_EXPANDED_TEXT | VIEW_ORIGINAL_TEXT |
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+| 737871 |  1677150410 | 386004 |                0 | simba | USER       |         0 | 4460486 | dwd_prod_bms_info_frequent_v_di | EXTERNAL_TABLE | NULL               | NULL               |
++--------+-------------+--------+------------------+-------+------------+-----------+---------+------------------------------------+----------------+--------------------+--------------------+
+1 row in set (0.00 sec)
+</code></pre>
+<p>正好和出现问题的时间差不多。所以根本问题是move文件的时候文件名称相同冲突导致的。<br>
+于是修改表的location 问题解决。</p>
+<h4 id="五-参考资料">五、参考资料</h4>
+<p>https://www.notion.so/20230227-hive-move-8b1ecfbe901547faa7011d27ddc94e74?pvs=4#3be0a81c98924d47a4b2507b1b523402<br>
+https://www.notion.so/20230227-hive-move-8b1ecfbe901547faa7011d27ddc94e74?pvs=4#5eebdf49984d499588226ff2c087fb7c</p>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+            <div class="next-post">
+              <div class="next">
+                下一篇
+              </div>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">
+                <h3 class="post-title">
+                  maven 找不到 jar 如何修复
+                </h3>
+              </a>
+            </div>
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge warning">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge success">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge success">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge secondary">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge success">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge ">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge secondary">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

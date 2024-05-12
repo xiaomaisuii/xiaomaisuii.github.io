@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>hive udf year() 源码分析 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>hive udf year() 源码分析</h1>
+            <p class="article-meta">
+              2023-02-08
+              
+                <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge secondary">
+                  hive源码
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <!-- more -->
+<h4 id="hive-函数">hive  函数</h4>
+<p>year()</p>
+<h4 id="用法">用法</h4>
+<p>select year('2022-02-01')</p>
+<h4 id="返回值">返回值</h4>
+<p>2022</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.UDFYear</p>
+<h4 id="源代码">源代码</h4>
+<pre><code>/**
+ * UDFYear.
+ *
+ */
+// @Description 注解为函数的描述与用法
+@Description(name = &quot;year&quot;,
+    value = &quot;_FUNC_(param) - Returns the year component of the date/timestamp/interval&quot;,
+    extended = &quot;param can be one of:\n&quot;
+    + &quot;1. A string in the format of 'yyyy-MM-dd HH:mm:ss' or 'yyyy-MM-dd'.\n&quot;
+    + &quot;2. A date value\n&quot;
+    + &quot;3. A timestamp value\n&quot;
+    + &quot;4. A year-month interval value&quot;
+    + &quot;Example:\n &quot;
+    + &quot;  &gt; SELECT _FUNC_('2009-07-30') FROM src LIMIT 1;\n&quot; + &quot;  2009&quot;)
+@VectorizedExpressions({VectorUDFYearDate.class, VectorUDFYearString.class, VectorUDFYearTimestamp.class})
+// TODO NDV (number of distinct values) 注解是预设的一个估计值，帮助查询优化器更好的评估该列的数据分布
+@NDV(maxNdv = 20) // although technically its unbounded, its unlikely we will ever see ndv &gt; 20
+public class UDFYear extends GenericUDF {
+
+  private transient ObjectInspectorConverters.Converter[] converters =
+          new ObjectInspectorConverters.Converter[1];
+  private transient PrimitiveObjectInspector.PrimitiveCategory[] inputTypes =
+          new PrimitiveObjectInspector.PrimitiveCategory[1];
+  private final IntWritable output = new IntWritable();
+
+  private final Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone(&quot;UTC&quot;));
+
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 函数输入参数个数检验
+    checkArgsSize(arguments, 1, 1);
+    // 函数输入参数数据类型检验 Primitive 是否是原始数据类型
+    checkArgPrimitive(arguments, 0);
+    // 对传入的参数 进行类型转换
+    switch (((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory()) {
+      case INTERVAL_YEAR_MONTH:
+        inputTypes[0] = PrimitiveObjectInspector.PrimitiveCategory.INTERVAL_YEAR_MONTH;
+        converters[0] = ObjectInspectorConverters.getConverter(
+            arguments[0], PrimitiveObjectInspectorFactory.writableHiveIntervalYearMonthObjectInspector);
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        obtainDateConverter(arguments, 0, inputTypes, converters);
+        break;
+      default:
+        // build error message
+        StringBuilder sb = new StringBuilder();
+        sb.append(getFuncName());
+        sb.append(&quot; does not take &quot;);
+        sb.append(((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory());
+        sb.append(&quot; type&quot;);
+        throw new UDFArgumentTypeException(0, sb.toString());
+    }
+    // 返回一个输出类型对象检查器
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableIntObjectInspector;
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    switch (inputTypes[0]) {
+      case INTERVAL_YEAR_MONTH:
+        HiveIntervalYearMonth intervalYearMonth = getIntervalYearMonthValue(arguments, 0, inputTypes, converters);
+        if (intervalYearMonth == null) {
+          return null;
+        }
+        output.set(intervalYearMonth.getYears());
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+	    // 转换成date 类型然后再使用calendar 取年
+        Date date = getDateValue(arguments, 0, inputTypes, converters);
+        if (date == null) {
+          return null;
+        }
+        calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+    }
+    return output;
+  }
+	// 返回函数的名称 用于
+  @Override
+  protected String getFuncName() {
+    return &quot;year&quot;;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(getFuncName(), children);
+  }
+}
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>整体上year() 函数比较简单，主要的方法有两个 initialize(ObjectInspector[] arguments) 与 evaluate(DeferredObject[] arguments)</li>
+<li>initialize(ObjectInspector[] arguments)  进行初始化的一些操作</li>
+</ol>
+<pre><code>public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 函数输入参数个数检验
+    checkArgsSize(arguments, 1, 1);
+    // 函数输入参数数据类型检验 Primitive 是否是原始数据类型
+    checkArgPrimitive(arguments, 0);
+    // 对传入的参数 进行类型转换
+    switch (((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory()) {
+      case INTERVAL_YEAR_MONTH:
+        inputTypes[0] = PrimitiveObjectInspector.PrimitiveCategory.INTERVAL_YEAR_MONTH;
+        converters[0] = ObjectInspectorConverters.getConverter(
+            arguments[0], PrimitiveObjectInspectorFactory.writableHiveIntervalYearMonthObjectInspector);
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        obtainDateConverter(arguments, 0, inputTypes, converters);
+        break;
+      default:
+        // build error message
+        StringBuilder sb = new StringBuilder();
+        sb.append(getFuncName());
+        sb.append(&quot; does not take &quot;);
+        sb.append(((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory());
+        sb.append(&quot; type&quot;);
+        throw new UDFArgumentTypeException(0, sb.toString());
+    }
+    // 返回一个输出类型对象检查器
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableIntObjectInspector;
+    return outputOI;
+  }
+</code></pre>
+<p>整体上就是对输入的参数进行校验与转换并返回一个输出类型的对象检查器<br>
+3. evaluate(DeferredObject[] arguments) 是  year() udf函数的核心操作‘</p>
+<pre><code>public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    switch (inputTypes[0]) {
+      case INTERVAL_YEAR_MONTH:
+        HiveIntervalYearMonth intervalYearMonth = getIntervalYearMonthValue(arguments, 0, inputTypes, converters);
+        if (intervalYearMonth == null) {
+          return null;
+        }
+        output.set(intervalYearMonth.getYears());
+        break;
+      case STRING:
+      case CHAR:
+      case VARCHAR:
+      case DATE:
+      case TIMESTAMP:
+      case TIMESTAMPLOCALTZ:
+      case VOID:
+        Date date = getDateValue(arguments, 0, inputTypes, converters);
+        if (date == null) {
+          return null;
+        }
+        calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+    }
+    return output;
+  }
+</code></pre>
+<p>对输入的日期获取年<br>
+当输入的类型是 INTERVAL_YEAR_MONTH 的时候 直接进 getIntervalYearMonthValue(arguments, 0, inputTypes, converters)</p>
+<pre><code>// org.apache.hadoop.hive.ql.udf.generic.GenericUDF
+protected HiveIntervalYearMonth getIntervalYearMonthValue(DeferredObject[] arguments, int i,
+                                                            PrimitiveCategory[] inputTypes,
+      Converter[] converters) throws HiveException {
+    Object obj;
+	// 对输入的参数进行校验，当是null的时候直接返回
+    if ((obj = arguments[i].get()) == null) {
+      return null;
+    }
+
+    HiveIntervalYearMonth intervalYearMonth;
+    switch (inputTypes[i]) {
+      case STRING:
+      case VARCHAR:
+      case CHAR:
+        String intervalYearMonthStr = converters[i].convert(obj).toString();
+        intervalYearMonth = HiveIntervalYearMonth.valueOf(intervalYearMonthStr);
+        break;
+      case INTERVAL_YEAR_MONTH:
+        Object writableValue = converters[i].convert(obj);
+        intervalYearMonth = ((HiveIntervalYearMonthWritable) writableValue).getHiveIntervalYearMonth();``
+        break;
+      default: // 当类型都匹配不上的时候 抛出异常
+        throw new UDFArgumentTypeException(0, getFuncName()
+            + &quot; only takes INTERVAL_YEAR_MONTH and STRING_GROUP types, got &quot; + inputTypes[i]);
+    }
+    return intervalYearMonth;
+  }
+
+</code></pre>
+<p>getIntervalYearMonthValue 方法对 输入的进行封装成 HiveIntervalYearMonth 当中有 getYear() 直接返回年份</p>
+<pre><code>protected final static int MONTHS_PER_YEAR = 12;
+public int getYears() {
+// 使用取整的方式进行获取年
+    return totalMonths / MONTHS_PER_YEAR;
+}
+public void set(int years, int months) {
+    this.totalMonths = months;
+    this.totalMonths += years * MONTHS_PER_YEAR;
+}
+</code></pre>
+<p>当输入的是 字符串和TIMSTAMP类型的时候 走 getDateValue(arguments, 0, inputTypes, converters); 返回一个 date</p>
+<pre><code>// org.apache.hadoop.hive.ql.udf.generic.GenericUDF
+protected Date getDateValue(DeferredObject[] arguments, int i, PrimitiveCategory[] inputTypes,
+                              Converter[] converters) throws HiveException {
+    Object obj;
+    if ((obj = arguments[i].get()) == null) {
+      return null;
+    }
+
+    Date date;
+    switch (inputTypes[i]) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+      String dateStr = converters[i].convert(obj).toString();
+      try {
+       // 转换date期类型
+        date = Date.valueOf(dateStr);
+      } catch (IllegalArgumentException e) {
+        date = null;
+      }
+      break;
+    case TIMESTAMP:
+    case DATE:
+    case TIMESTAMPLOCALTZ:
+      Object writableValue = converters[i].convert(obj);
+      date = ((DateWritableV2) writableValue).get();
+      break;
+    default:
+      throw new UDFArgumentTypeException(0, getFuncName()
+          + &quot; only takes STRING_GROUP and DATE_GROUP types, got &quot; + inputTypes[i]);
+    }
+    return date;
+  }
+
+</code></pre>
+<p>其核心就是  date = Date.valueOf(dateStr); 转换成date类型</p>
+<p>再次回到 evaluate(DeferredObject[] arguments) 方法中</p>
+<pre><code class="language-java">// 根据java的 calendar 类型 进行求年
+calendar.setTimeInMillis(date.toEpochMilli());
+        output.set(calendar.get(Calendar.YEAR));
+</code></pre>
+<h4 id="总结">总结</h4>
+<ol>
+<li>虽然函数的功能很少，但是底层代码逻辑写的还是较为复杂的，其中有大量校验逻辑，这也充分说明hive源码当中做了很多代码质量的工作。</li>
+<li>再读源码的时候，可以学习到很大大佬写代码的风格与思考，看似简单的逻辑，其实要写的健壮性比较高的话，还是需要考虑很多的。</li>
+<li>其中有很多地方不懂得地方可以debug或者自己写代码测试</li>
+</ol>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge ">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge success">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge warning">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge warning">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge warning">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge warning">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge secondary">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge success">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

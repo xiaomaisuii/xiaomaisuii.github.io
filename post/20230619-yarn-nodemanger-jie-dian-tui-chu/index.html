@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>20230619 yarn nodemanger 节点退出 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>20230619 yarn nodemanger 节点退出</h1>
+            <p class="article-meta">
+              2023-07-15
+              
+                <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge secondary">
+                  hadoop
+                </a>
+              
+                <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge success">
+                  故障报告
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <h4 id="一-问题现象">一、问题现象</h4>
+<p>在报警群发现 hadoop nodemanger 节点的系统盘超过90%，并且陆续的超过了90%<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151317270.png" alt="" loading="lazy"></p>
+<p>这个时候 nodemanger 节点已经在陆续退出</p>
+<h4 id="二-持续时间">二、持续时间</h4>
+<p>从 6月 17日 8点到 17点</p>
+<h4 id="三-影响范围">三、影响范围</h4>
+<p>国内所以 hive spark 任务阻塞、并且上报流数据 小时分区挂载失败。</p>
+<h4 id="四-问题原因">四、问题原因</h4>
+<p>直接原因是 发现有一个sql 执行了3天没有结束，导致在 NodeManager 本地目录被打满，NodeManager 退出</p>
+<p>[root@hadoop-21 appcache]# pwd/data/yarn/nm/usercache/juan.chen/appcache[root@hadoop-21 appcache]# du -sh application_1683901442987_383801421G    application_1683901442987_383801<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151318284.png" alt="" loading="lazy"></p>
+<p>本质原因是，NodeManager 本地目录 存放在系统盘上了：/data/yarn/nm<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151319292.png" alt="" loading="lazy"></p>
+<h4 id="五-解决问题">五、解决问题</h4>
+<p>先杀死任务，让nodemanger 任务上线；</p>
+<p>增加 NodeManager 本地目录 [yarn.nodemanager.local-dirs] 为多个数据盘目录，重启 NodeManger 节点。</p>
+<p>/DATA/disk1/yarn/nm<br>
+/DATA/disk2/yarn/nm<br>
+/DATA/disk3/yarn/nm<br>
+/DATA/disk4/yarn/nm<br>
+<img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202307151320449.png" alt="" loading="lazy"></p>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+            <div class="next-post">
+              <div class="next">
+                下一篇
+              </div>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">
+                <h3 class="post-title">
+                  LeetCode 最接近的三数之和+双指针解法
+                </h3>
+              </a>
+            </div>
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge ">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge success">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge success">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge ">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge warning">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge success">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge secondary">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge secondary">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

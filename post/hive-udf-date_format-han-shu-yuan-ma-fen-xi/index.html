@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>hive udf date_format 函数源码分析 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>hive udf date_format 函数源码分析</h1>
+            <p class="article-meta">
+              2023-02-18
+              
+                <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge ">
+                  hive源码
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <h4 id="hive-函数">hive  函数</h4>
+<p>date_format ()</p>
+<h4 id="用法">用法</h4>
+<p>select weekofyear('2022-01-01 12:20:20','yyyy-MM-dd')</p>
+<h4 id="返回值">返回值</h4>
+<p>2022-01-01</p>
+<h4 id="函数含义">函数含义</h4>
+<p>对输入的日期进行格式化</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.generic.GenericUDFDateFormat</p>
+<h4 id="源代码">源代码</h4>
+<pre><code class="language-java">@Description(name = &quot;date_format&quot;, value = &quot;_FUNC_(date/timestamp/string, fmt) - converts a date/timestamp/string &quot;
+    + &quot;to a value of string in the format specified by the date format fmt.&quot;,
+    extended = &quot;Supported formats are SimpleDateFormat formats - &quot;
+        + &quot;https://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html. &quot;
+        + &quot;Second argument fmt should be constant.\n&quot;
+        + &quot;Example: &gt; SELECT _FUNC_('2015-04-08', 'y');\n '2015'&quot;)
+public class GenericUDFDateFormat extends GenericUDF {
+  // 一个对象转换器
+  private transient Converter[] tsConverters = new Converter[2];
+  // 原始类型类别
+  private transient PrimitiveCategory[] tsInputTypes = new PrimitiveCategory[2];
+  private transient Converter[] dtConverters = new Converter[2];
+  private transient PrimitiveCategory[] dtInputTypes = new PrimitiveCategory[2];
+  private final java.util.Date date = new java.util.Date();
+  // 使用hadoop Text 用于输出
+  private final Text output = new Text();
+  private transient SimpleDateFormat formatter;
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+
+    // 检查输入的参数最大与最小个数
+    checkArgsSize(arguments, 2, 2);
+
+    // 校验输入的参数类型是不是hive的原始数据类型
+    checkArgPrimitive(arguments, 0);
+    checkArgPrimitive(arguments, 1);
+
+
+
+    // the function should support both short date and full timestamp format
+    // time part of the timestamp should not be skipped
+    // 校验数据类型，并保存到 tsInputTypes 、 tsInputTypes 、tsInputTypes 当中
+    // 输入类型必须是 string date 输出类型为 string
+    checkArgGroups(arguments, 0, tsInputTypes, STRING_GROUP, DATE_GROUP);
+    checkArgGroups(arguments, 0, dtInputTypes, STRING_GROUP, DATE_GROUP);
+
+    checkArgGroups(arguments, 1, tsInputTypes, STRING_GROUP);
+
+    // 对于输入的Timestamp 与 Date 获取类型转换器
+    obtainTimestampConverter(arguments, 0, tsInputTypes, tsConverters);
+    obtainDateConverter(arguments, 0, dtInputTypes, dtConverters);
+
+    if (arguments[1] instanceof ConstantObjectInspector) {
+      // 获取date_format() 函数的 要解析的格式
+      String fmtStr = getConstantStringValue(arguments, 1);
+      if (fmtStr != null) {
+        try {
+          // 使用java 的 simpleDateFormat  对输入的格式进行转换并设置时区为UTC
+          formatter = new SimpleDateFormat(fmtStr);
+          formatter.setTimeZone(TimeZone.getTimeZone(&quot;UTC&quot;));
+        } catch (IllegalArgumentException e) {
+          // ignore
+        }
+      }
+    } else {
+      // 当fmtStr 为null 的 时候直接抛出异常
+      throw new UDFArgumentTypeException(1, getFuncName() + &quot; only takes constant as &quot;
+          + getArgOrder(1) + &quot; argument&quot;);
+    }
+
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableStringObjectInspector;
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    if (formatter == null) {
+      return null;
+    }
+    // the function should support both short date and full timestamp format
+    // time part of the timestamp should not be skipped
+    // 把输入的第一个参数与类型转换器 获取到 Timestamp
+
+    Timestamp ts = getTimestampValue(arguments, 0, tsConverters);
+    if (ts == null) { // 如果输入的类型不是Timestamp 就是 Date了
+      // 根据类型转换器 记牌器date
+      Date d = getDateValue(arguments, 0, dtInputTypes, dtConverters);
+      if (d == null) {
+        return null;
+      }
+      // 把date 转换成 ts
+      ts = Timestamp.ofEpochMilli(d.toEpochMilli());
+    }
+    // 赋值给 date
+    date.setTime(ts.toEpochMilli());
+    // 进行格式化
+    String res = formatter.format(date);
+    if (res == null) {
+      return null;
+    }
+    // 赋值给 output
+    output.set(res);
+    return output;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(getFuncName(), children);
+  }
+
+  @Override
+  protected String getFuncName() {
+    return &quot;date_format&quot;;
+  }
+}
+
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>initialize(ObjectInspector[] arguments)  方法当中基本上就是一些输入参数的校验和初始化的代码</li>
+</ol>
+<pre><code>   // 检查输入的参数最大与最小个数
+   checkArgsSize(arguments, 2, 2);
+	
+  /**
+   * 对输入的参数进行个数的校验
+   * @param arguments
+   * @param min
+   * @param max
+   * @throws UDFArgumentLengthException
+   */
+  protected void checkArgsSize(ObjectInspector[] arguments, int min, int max)
+      throws UDFArgumentLengthException {
+    if (arguments.length &lt; min || arguments.length &gt; max) {
+      StringBuilder sb = new StringBuilder();
+      sb.append(getFuncName());
+      sb.append(&quot; requires &quot;);
+      if (min == max) {
+        sb.append(min);
+      } else {
+        sb.append(min).append(&quot;..&quot;).append(max);
+      }
+      sb.append(&quot; argument(s), got &quot;);
+      sb.append(arguments.length);
+      // 如果长度不对的话，就抛出长度异常
+      throw new UDFArgumentLengthException(sb.toString());
+    }
+  }
+
+</code></pre>
+<pre><code>    // 校验输入的参数类型是不是hive的原始数据类型
+    checkArgPrimitive(arguments, 0);
+    checkArgPrimitive(arguments, 1);
+  /**
+   * 校验是否是 PRIMITIVE 类型
+   * PRIMITIVE 为一些hive原始数据类型 如 String
+   * @param arguments
+   * @param i
+   * @throws UDFArgumentTypeException
+   */
+  protected void checkArgPrimitive(ObjectInspector[] arguments, int i)
+      throws UDFArgumentTypeException {
+    ObjectInspector.Category oiCat = arguments[i].getCategory();
+    if (oiCat != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(i, getFuncName() + &quot; only takes primitive types as &quot;
+          + getArgOrder(i) + &quot; argument, got &quot; + oiCat);
+    }
+  }
+</code></pre>
+<pre><code>
+
+    // 对于输入的Timestamp 与 Date 获取类型转换器
+    obtainTimestampConverter(arguments, 0, tsInputTypes, tsConverters);
+  /**
+   * 获取时间戳转换器
+   *
+   * @param arguments 输入数组
+   * @param i 输入的数组下标
+   * @param inputTypes 输入的类型数
+   * @param converters 转换器
+   * @throws UDFArgumentTypeException
+   */
+  protected void obtainTimestampConverter(ObjectInspector[] arguments, int i,
+      PrimitiveCategory[] inputTypes, Converter[] converters) throws UDFArgumentTypeException {
+    PrimitiveObjectInspector inOi = (PrimitiveObjectInspector) arguments[i];
+    PrimitiveCategory inputType = inOi.getPrimitiveCategory();
+    ObjectInspector outOi;
+
+    // 对获取的类型进行一个校验
+    switch (inputType) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+    case TIMESTAMP:
+    case DATE:
+    case TIMESTAMPLOCALTZ:
+      break;
+    default:
+      throw new UDFArgumentTypeException(i, getFuncName()
+          + &quot; only takes STRING_GROUP or DATE_GROUP types as &quot; + getArgOrder(i) + &quot; argument, got &quot;
+          + inputType);
+    }
+    outOi = PrimitiveObjectInspectorFactory.writableTimestampObjectInspector;
+    // 把获取到的Timestamp类型转换其复制给converters 对象
+    converters[i] = ObjectInspectorConverters.getConverter(inOi, outOi);
+    inputTypes[i] = inputType;
+  }
+    obtainDateConverter(arguments, 0, dtInputTypes, dtConverters);
+    
+</code></pre>
+<ol start="2">
+<li>evaluate(DeferredObject[] arguments)  核心的函数</li>
+</ol>
+<pre><code>	// 其中的核心就是使用java的 SimpleDateFormat 进行转换
+    Timestamp ts = getTimestampValue(arguments, 0, tsConverters);
+    if (ts == null) { // 如果输入的类型不是Timestamp 就是 Date了
+      // 根据类型转换器 记牌器date
+      Date d = getDateValue(arguments, 0, dtInputTypes, dtConverters);
+      if (d == null) {
+        return null;
+      }
+      // 把date 转换成 ts
+      ts = Timestamp.ofEpochMilli(d.toEpochMilli());
+    }
+    // 赋值给 date
+    date.setTime(ts.toEpochMilli());
+    // 进行格式化
+    String res = formatter.format(date);
+
+</code></pre>
+<h4 id="总结">总结</h4>
+<ol>
+<li>其实核心代码比较简单，大量的都是再数据类型的校验与转换上。</li>
+<li>但是从读代码的角度上看，发现了源码处处都在做校验，这也是源码再代码质量上做了很多。</li>
+</ol>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+            <div class="next-post">
+              <div class="next">
+                下一篇
+              </div>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-weekofyear-yuan-ma-fen-xi/">
+                <h3 class="post-title">
+                  hive udf weekofyear 源码分析
+                </h3>
+              </a>
+            </div>
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge success">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge secondary">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge warning">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge warning">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge success">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge secondary">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge warning">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>故障报告 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <h2 class="current-tag">标签: 故障报告</h2>
+          
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+    </h2>
+    <p class="article-meta">
+      2023-10-13
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge ">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      <h3 id="一-问题现象">一、问题现象</h3>
+<p>执行count(*) 发现统计结果为0，但是是有数据的。</p>
+<figure data-type="image" tabindex="1"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152508.png" alt="" loading="lazy"></figure>
+<p>count(*)的执行结果不对</p>
+<h3 id="二-影响范围">二、影响范围</h3>
+<p>所有dataX 接入的hive表</p>
+<h3 id="三-问题原因">三、问题原因</h3>
+<p>发现是count(*) 应该是直接查询的hive元数据，并没有实际查询数据来进行统计，那么问题的原因就是为啥元数据里面没有这个统计信息呢？<br>
+<img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132152528.png" alt="" loading="lazy"></p>
+<p><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153508.png" alt="" loading="lazy"><br>
+查询资料发现有参数会控制这个 insert overwrite 来统计分区信息的情况，查看也是开启的</p>
+<pre><code>set hive.stats.autogather;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://raw.githubusercontent.com/xiaomaisuii/picgo/master/picture202310132153141.png" alt="" loading="lazy"></figure>
+<p>但是这个表是通过 datax 接入的 那么dataX 接入的时候是没有hive write 插件的，所以使用的hdfs插件 然后走的是 add partitions 的方式加的分区。</p>
+<p>所有手动执行ANALYZE TABLE stage.stage_scheduler_task_instance_df PARTITION(dt='20231008',rgn='cn') COMPUTE STATISTICS 之后在查询发现在查询元数据的方式就查询到了。</p>
+<p>所以解决这个问题,要不在datax 端添加 ANALYZE TABLE ，要不就关闭 查询元数据的操作。关闭这个参数这有一个缺点就是浪费一些性能，不过查询的数据更准确了。</p>
+<pre><code class="language-jsx">set hive.compute.query.using.stats =false;
+</code></pre>
+<h3 id="四-解决问题">四、解决问题</h3>
+<p>由于 ANALYZE TABLE  在多线程并发执行的时候 会存在挂载分区失败的情况：<a href="https://blog.csdn.net/songjifei/article/details/104706737/">analyze 导致的分区挂载错误</a><br>
+所以就不能通过关闭查询元数据来解决问题了，需要解决</p>
+<p>修改hive-site.xml 参数 hive.compute.query.using.stats =false; 关闭查询元数据的方式来解决这个问题</p>
+<p>重启hiveServer2 服务即可</p>
+
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+    </h2>
+    <p class="article-meta">
+      2023-09-03
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge secondary">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge warning">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      <h5 id="一-问题现象">一、问题现象</h5>
+<p>24日 晚上 21:25  thing-14节点的  fe 不可用</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.82]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,976 WARN (doris-mysql-nio-pool-21500|1159757) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.0.130]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:24:57,977 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95589|1159853) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,978 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,980 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,984 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285774: errCode = 2, detailMessage = transaction [49285774] is already committed, not pre-committed.
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95566|1159776) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,985 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,986 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95547|1159682) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,987 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:24:57,988 WARN (thrift-server-pool-95568|1159778) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,989 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:57,992 WARN (thrift-server-pool-95550|1159748) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:24:58,015 WARN (thrift-server-pool-95588|1159852) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285772: errCode = 2, detailMessage = transaction [49285772] is already committed, not pre-committed.
+2023-08-24 21:24:58,026 WARN (thrift-server-pool-95594|1159880) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285711: errCode = 2, detailMessage = transaction [49285711] is already committed, not pre-committed.
+2023-08-24 21:24:58,029 WARN (thrift-server-pool-95574|1159784) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285692: errCode = 2, detailMessage = transaction [49285692] is already committed, not pre-committed.
+2023-08-24 21:24:58,030 WARN (thrift-server-pool-95593|1159879) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285722: errCode = 2, detailMessage = transaction [49285722] is already visible, not pre-committed.
+2023-08-24 21:25:18,171 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95548|1159683) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95566|1159776) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95593|1159879) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95537|1159671) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,174 WARN (thrift-server-pool-95574|1159784) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.18.68:22908
+2023-08-24 21:25:18,174 WARN (doris-mysql-nio-pool-21504|1159845) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.18.68]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95576|1159786) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95559|1159769) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,175 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93493|1146530) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-93416|1146005) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285704
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,176 WARN (thrift-server-pool-95582|1159839) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 19177, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91097|1129145) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10003, signature: 49285685
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-91184|1129790) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285792
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95447|1158984) [MasterImpl.finishTask():122] cannot find task. type: PUBLISH_VERSION, backendId: 10002, signature: 49285783
+2023-08-24 21:25:18,177 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,178 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():759] duplicate request for stream load. request id: 7547ca8125770199-c8c667cd4db77bb4, txn: 49285874
+2023-08-24 21:25:18,179 WARN (thrift-server-pool-95447|1158984) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,181 WARN (heartbeat mgr|32) [HeartbeatMgr.runAfterCatalogReady():139] get bad heartbeat response: type: BROKER, status: BAD, msg: java.net.ConnectException: Connection refused (Connection refused), name: hdfs_broker, host: 10.64.3.138, port: 8000
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ConnectProcessor.processOnce():533] Null packet received from network. remote: 10.64.17.140:46231
+2023-08-24 21:25:18,181 WARN (doris-mysql-nio-pool-21506|1159883) [ReadListener.lambda$handleEvent$0():58] Exception happened in one session([remote ip: 10.64.17.140]).
+java.io.IOException: Error happened when receiving packet.
+	at org.apache.doris.qe.ConnectProcessor.processOnce(ConnectProcessor.java:534) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at org.apache.doris.mysql.nio.ReadListener.lambda$handleEvent$0(ReadListener.java:50) ~[doris-fe.jar:1.0-SNAPSHOT]
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149) ~[?:1.8.0_202]
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624) ~[?:1.8.0_202]
+	at java.lang.Thread.run(Thread.java:748) ~[?:1.8.0_202]
+2023-08-24 21:25:18,183 WARN (thrift-server-pool-91242|1130575) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+2023-08-24 21:25:18,184 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,185 WARN (thrift-server-pool-95468|1159269) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,186 WARN (thrift-server-pool-95577|1159833) [FrontendServiceImpl.loadTxn2PC():895] failed to commit txn 49285866: errCode = 2, detailMessage = transaction [49285866] is already committed, not pre-committed.
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95497|1159476) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95596|1159886) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-90434|1121706) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95458|1159258) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,189 WARN (thrift-server-pool-95500|1159479) [FrontendServiceImpl.loadTxn2PC():895] failed to abort txn -1: errCode = 2, detailMessage = transaction [-1] not found
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95534|1159668) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95587|1159844) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-91184|1129790) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,190 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 21:25:18,199 WARN (thrift-server-pool-95572|1159782) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+2023-08-24 22:53:21,671 WARN (UNKNOWN 10.64.2.34_9011_1675406978447(-1)|1) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: UNKNOWN
+2023-08-24 22:53:21,694 WARN (RepNode 10.64.2.34_9011_1675406978447(-1)|65) [Catalog.notifyNewFETypeTransfer():2318] notify new FE type transfer: FOLLOWER
+</code></pre>
+<p>25日早上后 thing-15节点 也不可用 ，切不可通过重启fe来恢复。</p>
+<pre><code class="language-sql">2023-08-25 10:14:50,112 INFO (replayer|78) [Catalog.replayJournal():2444] replayed journal id is 144013318, replay to journal id is 155973007
+2023-08-25 10:14:50,119 ERROR (replayer|78) [BDBJournalCursor.&lt;init&gt;():84] Can not find the key:144013319, fail to get journal cursor. will exit.
+</code></pre>
+<p>并且再次启动失败</p>
+<h5 id="二-持续时间">二、持续时间</h5>
+<p>14节点：2023-08-24 21:25 ～ 2023-08-24 22:53</p>
+<p>15节点： 25号早上8点 到 11点</p>
+<h5 id="三-问题原因">三、问题原因</h5>
+<p>通过最开始的日志发现</p>
+<pre><code class="language-sql">2023-08-24 21:25:18,183 WARN (leaderCheckpointer|138) [Checkpoint.checkMemoryEnoughToDoCheckpoint():313] the memory used percent 99 exceed the checkpoint memory threshold: 70
+</code></pre>
+<p>有一条内存满了的日志，在往上找报了一个找不到表的信息</p>
+<pre><code class="language-sql">2023-08-24 21:24:57,978 WARN (thrift-server-pool-95475|1159276) [FrontendServiceImpl.loadTxnBegin():766] failed to begin: errCode = 7, detailMessage = unknown table, tableName=t_device_info_wide
+</code></pre>
+<p>所以说是fe内存满了 导致宕机。</p>
+<p>第二天早上的 15 机器宕机也是内存的问题，这个写 t_device_info_wide 表的任务还没有下线导致的内存增加。</p>
+<p>但是重启15机器的 fe 报了 元数据错误，这个意思就是 15 节点元数据损坏了，起不来了。</p>
+<h5 id="四-解决问题">四、解决问题</h5>
+<p>上面本质原因是 找不到表 t_device_info_wide 导致内存溢出。先删掉写 表t_device_info_wide的任务 修改FE节点 内存 从 8G 到 16G【内存默认配置在fe.conf配置文件当中】 ,并且从监控上看也是内存占用很高，需要增加了。</p>
+<p><img src="https://raw.githubusercontent.com/liwenjie001/picgo/master/picture202309031949945.png" alt="" loading="lazy"><br>
+15节点元数据算坏，只能手动停止FE进程 。手动删除元数据（可以备份到其他目录）</p>
+<p>登录 客户端 执行 删除 15节点FE的命令</p>
+<pre><code class="language-sql">删除 FE 节点
+使用以下命令删除对应的 FE 节点：
+
+ALTER SYSTEM DROP FOLLOWER[OBSERVER] &quot;fe_host:edit_log_port&quot;;
+</code></pre>
+<p>手动从master 同步元数据 并启动15节点</p>
+<pre><code class="language-sql">首先第一次启动时，需执行以下命令：
+
+./bin/start_fe.sh --helper leader_fe_host:edit_log_port --daemon
+
+其中 leader_fe_host 为 Master 所在节点 ip, edit_log_port 在 Master 的配置文件 fe.conf 中。--helper 参数仅在 follower 和 observer 第一次启动时才需要。
+</code></pre>
+<p>启动成功后，在把新的FE添加进去</p>
+<pre><code class="language-sql">将 Follower 或 Observer 加入到集群
+添加 Follower 或 Observer。使用 mysql-client 连接到已启动的 FE，并执行：
+
+ALTER SYSTEM ADD FOLLOWER &quot;follower_host:edit_log_port&quot;;
+
+或
+
+ALTER SYSTEM ADD OBSERVER &quot;observer_host:edit_log_port&quot;;
+</code></pre>
+<p>最终问题解决。</p>
+<h5 id="五-总结">五、总结</h5>
+<p>fe 有守护进程，但是没有起作用，宕机没有起来。没有对进程的存活监控。没有对进程内存使用的监控报警。</p>
+<p>虽然fe是高可用的方案，但是各业务系统都是连接的单个fe,存在单点故障。</p>
+<p>解决方案 连接多个节点或者对fe节点[8030 9030 等端口]做一个lb负载均衡操作，这样单个节点有问题后会自动切换到另外一个节点，并且还可以做到负载均衡，对单个节点压力较小。</p>
+<h5 id="六-参考资料">六、参考资料</h5>
+<p>https://doris.apache.org/zh-CN/docs/1.2/admin-manual/cluster-management/elastic-expansion/</p>
+
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+    </h2>
+    <p class="article-meta">
+      2023-07-15
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge secondary">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge ">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+    </h2>
+    <p class="article-meta">
+      2023-07-15
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge warning">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+    </h2>
+    <p class="article-meta">
+      2023-03-11
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge secondary">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+  <article class="article">
+    <h2 class="article-title">
+      <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+    </h2>
+    <p class="article-meta">
+      2023-03-05
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge success">
+          故障报告
+        </a>
+      
+    </p>
+    <p class="text-lead">
+      
+    </p>
+    <div class="row">
+      <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/" class="readmore-link">
+        <button>
+          Read More
+        </button>
+      </a>
+    </div>
+  </article>
+
+
+        </div>
+        <div class="row flex-edges">
+  
+  
+</div>
+
+      </div>
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge secondary">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge warning">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge secondary">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge warning">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge success">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge secondary">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge warning">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge secondary">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+
+  </body>
+</html>

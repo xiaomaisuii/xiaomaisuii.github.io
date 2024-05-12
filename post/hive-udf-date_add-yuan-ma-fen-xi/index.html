@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>hive udf date_add 源码分析 | 小麦穗的博客</title>
+<meta name="description" content="温故而知新">
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="shortcut icon" href="https://xiaomaisuii.github.io/favicon.ico?v=1715516407192">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="stylesheet" href="https://unpkg.com/papercss@1.6.1/dist/paper.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+<link rel="stylesheet" href="https://xiaomaisuii.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+<script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=GT-P848Z2W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'GT-P848Z2W');
+</script>
+
+
+  </head>
+  <body>
+  
+    <nav class="navbar border fixed split-nav">
+  <div class="nav-brand">
+    <h3><a href="https://xiaomaisuii.github.io">小麦穗的博客</a></h3>
+  </div>
+  <div class="collapsible">
+    <input id="collapsible1" type="checkbox" name="collapsible1">
+    <button>
+      <label for="collapsible1">
+        <div class="bar1"></div>
+        <div class="bar2"></div>
+        <div class="bar3"></div>
+      </label>
+    </button>
+    <div class="collapsible-body">
+      <ul class="inline">
+        
+          <li>
+            
+              <a href="/" class="menu">
+                首页
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/archives" class="menu">
+                归档
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/tags" class="menu">
+                标签
+              </a>
+            
+          </li>
+        
+          <li>
+            
+              <a href="/post/about" class="menu">
+                关于
+              </a>
+            
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+    <div id="top" class="row site">
+      <div class="sm-12 md-8 col">
+        <div class="paper">
+          <article class="article">
+            <h1>hive udf date_add 源码分析</h1>
+            <p class="article-meta">
+              2023-02-19
+              
+                <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge secondary">
+                  hive源码
+                </a>
+              
+            </p>
+            
+            <div class="post-content" v-pre>
+              <h4 id="hive-函数">hive  函数</h4>
+<p>date_add  ()</p>
+<h4 id="用法">用法</h4>
+<p>select weekofyear('2022-01-01 12:20:20',2)</p>
+<h4 id="返回值">返回值</h4>
+<p>2022-01-03</p>
+<h4 id="函数含义">函数含义</h4>
+<p>对输入的yyyy-MM-dd HH:mm:ss' or 'yyyy-MM-dd' 进行天数相加</p>
+<h4 id="源码地址">源码地址</h4>
+<p>org.apache.hadoop.hive.ql.udf.generic.GenericUDFDateAdd</p>
+<h4 id="源代码">源代码</h4>
+<pre><code>@Description(name = &quot;date_add&quot;,
+    value = &quot;_FUNC_(start_date, num_days) - Returns the date that is num_days after start_date.&quot;,
+    extended = &quot;start_date is a string in the format 'yyyy-MM-dd HH:mm:ss' or&quot;
+        + &quot; 'yyyy-MM-dd'. num_days is a number. The time part of start_date is &quot;
+        + &quot;ignored.\n&quot;
+        + &quot;Example:\n &quot;
+        + &quot;  &gt; SELECT _FUNC_('2009-07-30', 1) FROM src LIMIT 1;\n&quot;
+        + &quot;  '2009-07-31'&quot;)
+@VectorizedExpressions({VectorUDFDateAddColScalar.class, VectorUDFDateAddScalarCol.class, VectorUDFDateAddColCol.class})
+public class GenericUDFDateAdd extends GenericUDF {
+  // hvie Date解析器 把 String =&gt; Date
+  private transient final DateParser dateParser = new DateParser();
+  private transient final Date dateVal = new Date();
+  private transient Converter dateConverter;
+  private transient Converter daysConverter;
+  private transient PrimitiveCategory inputType1;
+  private transient PrimitiveCategory inputType2;
+
+  // DateWritableV2 相当于 java.sql.Date 的可写。日期格式为 YYYY-MM-DD
+  private final DateWritableV2 output = new DateWritableV2();
+  protected int signModifier = 1;  // 1 for addition, -1 for subtraction
+
+  @Override
+  public ObjectInspector initialize(ObjectInspector[] arguments) throws UDFArgumentException {
+    // 这里是自己写的的判断 可以更换成 checkArgsSize
+    if (arguments.length != 2) {
+      throw new UDFArgumentLengthException(
+        &quot;date_add() requires 2 argument, got &quot; + arguments.length);
+    }
+    // 验证是否是hive 原始数据类型 可以使用 checkArgPrimitive 替代
+    if (arguments[0].getCategory() != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(0,
+        &quot;Only primitive type arguments are accepted but &quot;
+        + arguments[0].getTypeName() + &quot; is passed. as first arguments&quot;);
+    }
+
+    if (arguments[1].getCategory() != ObjectInspector.Category.PRIMITIVE) {
+      throw new UDFArgumentTypeException(1,
+        &quot;Only primitive type arguments are accepted but &quot;
+        + arguments[1].getTypeName() + &quot; is passed. as second arguments&quot;);
+    }
+
+
+
+    inputType1 = ((PrimitiveObjectInspector) arguments[0]).getPrimitiveCategory();
+    ObjectInspector outputOI = PrimitiveObjectInspectorFactory.writableDateObjectInspector;
+    // 对输入的类型进行校验与转换
+    switch (inputType1) {
+    case STRING:
+    case VARCHAR:
+    case CHAR:
+      inputType1 = PrimitiveCategory.STRING;
+      dateConverter = ObjectInspectorConverters.getConverter(
+        (PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableStringObjectInspector);
+      break;
+    case TIMESTAMP:
+      dateConverter = new TimestampConverter((PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableTimestampObjectInspector);
+      break;
+    case DATE:
+      dateConverter = ObjectInspectorConverters.getConverter(
+        (PrimitiveObjectInspector) arguments[0],
+        PrimitiveObjectInspectorFactory.writableDateObjectInspector);
+      break;
+    default:
+      throw new UDFArgumentException(
+        &quot; DATE_ADD() only takes STRING/TIMESTAMP/DATEWRITABLE types as first argument, got &quot;
+        + inputType1);
+    }
+
+    inputType2 = ((PrimitiveObjectInspector) arguments[1]).getPrimitiveCategory();
+    switch (inputType2) {
+      case BYTE:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableByteObjectInspector);
+        break;
+      case SHORT:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableShortObjectInspector);
+        break;
+      case INT:
+        daysConverter = ObjectInspectorConverters.getConverter(
+            (PrimitiveObjectInspector) arguments[1],
+            PrimitiveObjectInspectorFactory.writableIntObjectInspector);
+        break;
+      default:
+        throw new UDFArgumentException(
+            &quot; DATE_ADD() only takes TINYINT/SMALLINT/INT types as second argument, got &quot; + inputType2);
+    }
+
+    return outputOI;
+  }
+
+  @Override
+  public Object evaluate(DeferredObject[] arguments) throws HiveException {
+    if (arguments[0].get() == null) {
+      return null;
+    }
+
+    Object daysWritableObject = daysConverter.convert(arguments[1].get());
+    if (daysWritableObject == null) {
+      return null;
+    }
+
+    int toBeAdded;
+    // 对输入的第二个 需要加减的参数进行类型转换
+    if (daysWritableObject instanceof ByteWritable) {
+      toBeAdded = ((ByteWritable) daysWritableObject).get();
+    } else if (daysWritableObject instanceof ShortWritable) {
+      toBeAdded = ((ShortWritable) daysWritableObject).get();
+    } else if (daysWritableObject instanceof IntWritable) {
+      toBeAdded = ((IntWritable) daysWritableObject).get();
+    } else {
+      return null;
+    }
+
+    // Convert the first param into a DateWritableV2 value
+    // 不同的类型处理的方式不一样
+
+    switch (inputType1) {
+    case STRING:
+      String dateString = dateConverter.convert(arguments[0].get()).toString();
+      if (dateParser.parseDate(dateString, dateVal)) {
+        output.set(dateVal);
+      } else {
+        return null;
+      }
+      break;
+    case TIMESTAMP:
+      Timestamp ts = ((TimestampWritableV2) dateConverter.convert(arguments[0].get()))
+        .getTimestamp();
+      output.set(DateWritableV2.millisToDays(ts.toEpochMilli()));
+      break;
+    case DATE:
+      DateWritableV2 dw = (DateWritableV2) dateConverter.convert(arguments[0].get());
+      output.set(dw.getDays());
+      break;
+    default:
+      throw new UDFArgumentException(
+        &quot;DATE_ADD() only takes STRING/TIMESTAMP/DATEWRITABLE types, got &quot; + inputType1);
+    }
+    // 总体上的思路是把不同的格式转换成天 再相加上第二个参数 再把day转换成 Date类型
+    int newDays = output.getDays() + (signModifier * toBeAdded);
+
+    output.set(newDays);
+    return output;
+  }
+
+  @Override
+  public String getDisplayString(String[] children) {
+    return getStandardDisplayString(&quot;date_add&quot;, children);
+  }
+}
+</code></pre>
+<h4 id="源码分析">源码分析</h4>
+<ol>
+<li>整体上架构都是对输入的类型进行校验与转换</li>
+<li>把对输入的时间函数转换成天再进行相加操作，之后再转换成Date返回回去</li>
+</ol>
+<h4 id="总结">总结</h4>
+<ol>
+<li>其实udf函数总体上都是都是比较简单的，所以核心的逻辑很少。</li>
+<li>当看了几个udf源码之后就会发现 每个源码的校验逻辑有的是自己实现，有的是使用父类GenericUDF自带的公共方法写的，我猜测大家实现的方式不同有可能是每个开发者的风格不一样，还有就是再开发这个函数的时候有可能父类当中还没有这个功能的函数。</li>
+</ol>
+
+            </div>
+          </article>
+        </div>
+        <div class="paper" data-aos="fade-in">
+          
+            <div class="next-post">
+              <div class="next">
+                下一篇
+              </div>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_format-han-shu-yuan-ma-fen-xi/">
+                <h3 class="post-title">
+                  hive udf date_format 函数源码分析
+                </h3>
+              </a>
+            </div>
+          
+        </div>
+        
+          
+            <div class="paper" data-aos="fade-in">
+              <div id="gitalk-container"></div>
+            </div>
+          
+
+          
+        
+      </div>
+
+      <div class="sm-12 md-4 col sidebar">
+  <div class="paper info-container">
+    <img src="https://xiaomaisuii.github.io/images/avatar.png?v=1715516407192" class="no-responsive avatar">
+    <div class="text-muted">温故而知新</div>
+    <div class="social-container">
+      
+        
+          <a href="https://github.com/liwenjie001" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+          <a href="https://twitter.com/xiaomaisui" target="_blank">
+            <i class="fab fa-twitter"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      最新文章
+    </div>
+    <div class="row">
+      <ul>
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20231010-hive-count-cha-xun-wei-0/">20231010 hive count(*) 查询为0</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230825-doris-fe-bu-ke-yong-gu-zhang/">20230825 doris fe 不可用故障</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230629-emr-hive-xie-s3-wen-jian-yi-ge-dao-zhi-de-shu-ju-qing-xie/">20230629 emr hive 写s3 文件一个导致的数据倾斜</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230619-yarn-nodemanger-jie-dian-tui-chu/">20230619 yarn nodemanger 节点退出</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zui-jie-jin-de-san-shu-zhi-he-shuang-zhi-zhen-jie-fa/">LeetCode 最接近的三数之和+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/leetcode-zhi-san-shu-zhi-he-shu-zu-pai-xu-jie-fa/">LeetCode之三数之和数组排序+双指针解法</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230310-hive-ren-wu-bao-cuo-unable-to-close-file-because-the-last/">20230310 hive任务报错  Unable to close file because the last</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/20230227-hive-move-yi-dong-wen-jian-bao-cuo/">20230227 hive move 移动文件报错</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/maven-zhao-bu-dao-jar-ru-he-xiu-fu/">maven 找不到 jar 如何修复</a>
+            </li>
+          
+        
+          
+            <li>
+              <a href="https://xiaomaisuii.github.io/post/hive-udf-date_add-yuan-ma-fen-xi/">hive udf date_add 源码分析</a>
+            </li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+      </ul>
+    </div>
+  </div>
+  <div class="paper">
+    <div class="sidebar-title">
+      标签列表
+    </div>
+    <div class="row">
+      
+        <a href="https://xiaomaisuii.github.io/tag/QXeFgrnFq/" class="badge ">
+          hive
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/g97ISByHl/" class="badge warning">
+          故障报告
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/7uI64e6p8/" class="badge warning">
+          doris
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/wGvzd_P98/" class="badge ">
+          性能优化
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/45UAUheGh/" class="badge secondary">
+          hadoop
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/xmn3eQRLt/" class="badge warning">
+          LeetCode
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/NUC21ZPXT/" class="badge secondary">
+          maven
+        </a>
+      
+        <a href="https://xiaomaisuii.github.io/tag/Cc_XhZANX/" class="badge ">
+          hive源码
+        </a>
+      
+    </div>
+  </div>
+  <div class="paper">
+    Powered by <a href="https://xiaomaisuii.github.io" target="_blank">小麦穗i</a> | <a class="rss" href="https://xiaomaisuii.github.io/atom.xml" target="_blank">RSS</a>
+  </div>
+</div>
+
+
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+
+<script type="application/javascript">
+
+AOS.init();
+
+hljs.initHighlightingOnLoad()
+
+</script>
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '872612f043d8f5329fe7',
+        clientSecret: '8d3e8ce449925125f112ae2953c16894ae54777f',
+        repo: 'blog_comment',
+        owner: 'liwenjie001',
+        admin: ['liwenjie001'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>
